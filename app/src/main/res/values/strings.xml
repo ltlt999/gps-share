@@ -27,6 +27,18 @@
     <string name="home_btn_stop">停止传输</string>
     <string name="home_note">默认不自动运行；开启「设置 → 开机自动开始传输」后，开机或打开本软件都会自动开始传输。</string>
 
+    <!-- 传输方式 -->
+    <string name="home_transport_title">传输方式</string>
+    <string name="home_transport_bluetooth">蓝牙</string>
+    <string name="home_transport_wifi">WiFi</string>
+    <string name="home_wifi_title">热点服务信息</string>
+    <string name="home_wifi_address">热点地址</string>
+    <string name="home_wifi_port">端口</string>
+    <string name="home_wifi_peers">在线接收端</string>
+    <string name="home_wifi_peers_empty">暂无接收端连接</string>
+    <string name="home_wifi_no_hotspot">未检测到热点。请先在「系统设置 → 个人热点」中开启热点，接收端连上该热点后即可使用。</string>
+    <string name="home_wifi_hint">接收端连上本机热点后，用 TCP 连接上方地址与端口即可接收；也可由接收端自动发现。</string>
+
     <!-- 状态文案 -->
     <string name="state_idle">未开始</string>
     <string name="state_waiting">等待设备连接</string>
@@ -47,6 +59,8 @@
     <string name="stat_sentences">已发送语句</string>
     <string name="stat_rate">发送速率</string>
     <string name="stat_device">连接设备</string>
+    <string name="value_peer_count">%1$d 台</string>
+    <string name="notif_stats_duration">已连接 %1$s</string>
 
     <!-- 数值 -->
     <string name="value_no_fix">无定位</string>

@@ -21,9 +21,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.bt.ConnectionMode;
+import com.gpsbt.transfer.link.Peer;
+import com.gpsbt.transfer.link.Transport;
+import com.gpsbt.transfer.net.HotspotAddresses;
 import com.gpsbt.transfer.service.GpsOutputService;
 import com.gpsbt.transfer.state.TransmitterState;
 import com.gpsbt.transfer.ui.adapter.PairedDeviceAdapter;
+import com.gpsbt.transfer.ui.adapter.PeerAdapter;
 import com.gpsbt.transfer.ui.view.PulseButtonView;
 import com.gpsbt.transfer.ui.view.StatCardView;
 import com.gpsbt.transfer.util.Formatters;
@@ -44,6 +48,8 @@ public class HomeFragment extends Fragment
     private PulseButtonView pulseButton;
     private TextView statusBadge;
     private TextView statusText;
+    private MaterialButtonToggleGroup transportGroup;
+    private TextView modeTitle;
     private MaterialButtonToggleGroup modeGroup;
     private TextView modeHint;
     private View serviceCard;
@@ -53,11 +59,19 @@ public class HomeFragment extends Fragment
     private RecyclerView deviceList;
     private TextView deviceEmpty;
     private Button refreshDevices;
+    private View wifiCard;
+    private TextView wifiAddressValue;
+    private TextView wifiPortValue;
+    private TextView wifiHint;
+    private View peerPanel;
+    private RecyclerView peerList;
+    private TextView peerEmpty;
     private GridLayout statsGrid;
 
     private final List<BluetoothDevice> devices = new ArrayList<BluetoothDevice>();
     private final Map<String, StatCardView> cards = new LinkedHashMap<String, StatCardView>();
     private PairedDeviceAdapter deviceAdapter;
+    private PeerAdapter peerAdapter;
     private String selectedMac;
 
     @Nullable
@@ -80,6 +94,8 @@ public class HomeFragment extends Fragment
         pulseButton = view.findViewById(R.id.pulse_button);
         statusBadge = view.findViewById(R.id.status_badge);
         statusText = view.findViewById(R.id.status_text);
+        transportGroup = view.findViewById(R.id.transport_group);
+        modeTitle = view.findViewById(R.id.mode_title);
         modeGroup = view.findViewById(R.id.mode_group);
         modeHint = view.findViewById(R.id.mode_hint);
         serviceCard = view.findViewById(R.id.service_card);
@@ -89,6 +105,13 @@ public class HomeFragment extends Fragment
         deviceList = view.findViewById(R.id.device_list);
         deviceEmpty = view.findViewById(R.id.device_empty);
         refreshDevices = view.findViewById(R.id.refresh_devices);
+        wifiCard = view.findViewById(R.id.wifi_card);
+        wifiAddressValue = view.findViewById(R.id.wifi_address_value);
+        wifiPortValue = view.findViewById(R.id.wifi_port_value);
+        wifiHint = view.findViewById(R.id.wifi_hint);
+        peerPanel = view.findViewById(R.id.peer_panel);
+        peerList = view.findViewById(R.id.peer_list);
+        peerEmpty = view.findViewById(R.id.peer_empty);
         statsGrid = view.findViewById(R.id.stats_grid);
 
         StatsGridBuilder.build(statsGrid, cards);
@@ -96,6 +119,28 @@ public class HomeFragment extends Fragment
         deviceAdapter = new PairedDeviceAdapter(devices, this);
         deviceList.setLayoutManager(new LinearLayoutManager(getContext()));
         deviceList.setAdapter(deviceAdapter);
+
+        peerAdapter = new PeerAdapter();
+        peerList.setLayoutManager(new LinearLayoutManager(getContext()));
+        peerList.setAdapter(peerAdapter);
+
+        transportGroup.addOnButtonCheckedListener(
+                new MaterialButtonToggleGroup.OnButtonCheckedListener() {
+                    @Override
+                    public void onButtonChecked(MaterialButtonToggleGroup group, int checkedId,
+                                                boolean isChecked) {
+                        if (!isChecked) {
+                            return;
+                        }
+                        Transport transport = checkedId == R.id.transport_wifi
+                                ? Transport.WIFI : Transport.BLUETOOTH;
+                        prefs.setTransport(transport);
+                        state.setTransport(transport == Transport.WIFI
+                                ? TransmitterState.Transport.WIFI
+                                : TransmitterState.Transport.BLUETOOTH);
+                        renderPanels();
+                    }
+                });
 
         modeGroup.addOnButtonCheckedListener(
                 new MaterialButtonToggleGroup.OnButtonCheckedListener() {
@@ -164,7 +209,8 @@ public class HomeFragment extends Fragment
             GpsOutputService.stop(requireContext());
             return;
         }
-        if (prefs.getMode() == ConnectionMode.CLIENT
+        if (prefs.getTransport() == Transport.BLUETOOTH
+                && prefs.getMode() == ConnectionMode.CLIENT
                 && (selectedMac == null || selectedMac.isEmpty())) {
             new MaterialAlertDialogBuilder(requireContext())
                     .setTitle(R.string.home_devices_title)
@@ -236,6 +282,11 @@ public class HomeFragment extends Fragment
         pulseButton.setState(running
                 ? PulseButtonView.State.RUNNING : PulseButtonView.State.IDLE);
 
+        Transport transport = snapshot.transport() == TransmitterState.Transport.WIFI
+                ? Transport.WIFI : Transport.BLUETOOTH;
+        transportGroup.check(transport == Transport.WIFI
+                ? R.id.transport_wifi : R.id.transport_bluetooth);
+
         ConnectionMode mode = snapshot.mode() == TransmitterState.Mode.CLIENT
                 ? ConnectionMode.CLIENT : ConnectionMode.SERVER;
         modeGroup.check(mode == ConnectionMode.CLIENT ? R.id.mode_client : R.id.mode_server);
@@ -274,8 +325,17 @@ public class HomeFragment extends Fragment
                 String.valueOf(running ? snapshot.stats().sentences : 0));
         set(StatsGridBuilder.KEY_RATE, String.format(Locale.US, "%.1f %s",
                 running ? snapshot.stats().rateHz : 0d, getString(R.string.unit_rate)));
-        TransmitterState.Device device = snapshot.connectedDevice();
-        set(StatsGridBuilder.KEY_DEVICE, device == null ? unknown : device.name);
+        List<Peer> peers = snapshot.peers();
+        if (peers.isEmpty()) {
+            set(StatsGridBuilder.KEY_DEVICE, unknown);
+        } else if (peers.size() == 1) {
+            set(StatsGridBuilder.KEY_DEVICE, peers.get(0).name);
+        } else {
+            set(StatsGridBuilder.KEY_DEVICE,
+                    getString(R.string.value_peer_count, peers.size()));
+        }
+        peerAdapter.submit(peers);
+        peerEmpty.setVisibility(peers.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
     private void set(String key, String value) {
@@ -286,10 +346,39 @@ public class HomeFragment extends Fragment
     }
 
     private void renderPanels() {
+        boolean wifi = prefs.getTransport() == Transport.WIFI;
         boolean client = prefs.getMode() == ConnectionMode.CLIENT;
-        serviceCard.setVisibility(client ? View.GONE : View.VISIBLE);
-        devicePanel.setVisibility(client ? View.VISIBLE : View.GONE);
-        modeHint.setText(client
-                ? R.string.home_mode_client_hint : R.string.home_mode_server_hint);
+
+        transportGroup.setVisibility(View.VISIBLE);
+        modeTitle.setVisibility(wifi ? View.GONE : View.VISIBLE);
+        modeGroup.setVisibility(wifi ? View.GONE : View.VISIBLE);
+        modeHint.setVisibility(wifi ? View.GONE : View.VISIBLE);
+
+        serviceCard.setVisibility(!wifi && !client ? View.VISIBLE : View.GONE);
+        devicePanel.setVisibility(!wifi && client ? View.VISIBLE : View.GONE);
+
+        wifiCard.setVisibility(wifi ? View.VISIBLE : View.GONE);
+        peerPanel.setVisibility(wifi ? View.VISIBLE : View.GONE);
+
+        if (wifi) {
+            renderWifiCard();
+        } else {
+            modeHint.setText(client
+                    ? R.string.home_mode_client_hint : R.string.home_mode_server_hint);
+        }
+    }
+
+    /** 刷新热点地址与端口；检测不到热点时给出引导。 */
+    private void renderWifiCard() {
+        wifiPortValue.setText(String.valueOf(prefs.getWifiPort()));
+        HotspotAddresses.Candidate candidate =
+                HotspotAddresses.pickLikelyHotspot(HotspotAddresses.localIpv4());
+        if (candidate == null) {
+            wifiAddressValue.setText(R.string.value_unknown);
+            wifiHint.setText(R.string.home_wifi_no_hotspot);
+        } else {
+            wifiAddressValue.setText(candidate.ip);
+            wifiHint.setText(R.string.home_wifi_hint);
+        }
     }
 }
