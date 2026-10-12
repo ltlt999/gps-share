@@ -1,14 +1,24 @@
-# GPS蓝牙传输
+# GPS共享
 
-把 Android 手机的 GPS 定位，按**标准 NMEA 0183** 格式，通过**蓝牙串口（SPP / RFCOMM）**实时输出给其他设备。接收端（笔记本、平板、车机、工控机）把本机当成一台普通蓝牙 GPS 外设即可使用。
+把 Android 手机的 GPS 定位共享给**没有 GPS 的设备**（平板、车机、工控机、笔记本）。
+
+两种传输方式、两个角色，同一个 APK：
+
+| | 说明 |
+|---|---|
+| **共享 GPS · 蓝牙** | 手机当蓝牙 GPS 外设，按标准 **NMEA 0183** 从蓝牙串口（SPP / RFCOMM）输出。接收端零安装即可识别 |
+| **共享 GPS · WiFi** | 手机在热点上开 TCP 服务，**可同时喂多台设备**，并用 UDP 信标让接收端自动发现 |
+| **接收 GPS** | 装到没有 GPS 的设备上，连上共享端，解析 NMEA 并通过系统「模拟位置」注入，导航 App 直接可用 |
 
 界面全中文，深色科技风。**默认不自动运行**；开启「设置 → 开机自动开始传输」后，重启手机将自动开始传输。
+
+> 本工程是 [`GPS蓝牙传输`](../GPS蓝牙传输) 的**独立特别版**（独立仓库、独立包名），在原版基础上加了 WiFi 传输与接收端角色。两版可同机并存安装。
 
 ---
 
 ## 界面截图
 
-主界面——脉冲式「开始传输」按钮 + 连接方式切换，首屏即可见：
+主界面——脉冲式「开始传输」按钮 + 角色与传输方式切换，首屏即可见：
 
 ![传输主页](docs/screenshots/1-home.png)
 
@@ -24,7 +34,7 @@
 
 ![运行日志](docs/screenshots/4-log.png)
 
-设置页——发送频率、NMEA 语句开关、蓝牙服务名与 UUID、定位来源、开机自启：
+设置页——发送频率、NMEA 语句开关、蓝牙服务名与 UUID、WiFi 端口与服务发现、定位来源、开机自启：
 
 ![设置](docs/screenshots/5-settings.png)
 
@@ -34,22 +44,45 @@
 
 | 功能 | 说明 |
 |---|---|
-| 两种蓝牙连接方式 | 「等待被连接」（手机做 SPP 服务端）与「主动连接」（手机连已配对设备），一键切换 |
-| 标准 NMEA 输出 | `$GPGGA` / `$GPRMC` / `$GPGSA` / `$GPGSV` / `$GPVTG` / `$GPZDA`，含 XOR 校验和，`\r\n` 结尾 |
+| 角色切换 | 「共享 GPS」与「接收 GPS」，同一 APK 两个角色 |
+| 传输方式切换 | 共享角色下可选 **蓝牙** 或 **WiFi(TCP)** |
+| 蓝牙两种连接方式 | 「等待被连接」（手机做 SPP 服务端）与「主动连接」（手机连已配对设备） |
+| WiFi 多接收端 | 一台手机可同时给多台设备供 GPS；界面实时列出在线接收端 |
+| 服务发现 | 发送端每秒广播 UDP 信标，接收端自动列出可用发送端，免手输 IP |
+| 接收端 | 连 TCP、解析 NMEA、通过「模拟位置」注入系统定位，导航 App 直接可用 |
+| 标准 NMEA 输出 / 解析 | `$GPGGA` / `$GPRMC` / `$GPGSA` / `$GPGSV` / `$GPVTG` / `$GPZDA`，含 XOR 校验和，`\r\n` 结尾 |
 | 按星座分组发送 | GSV 按卫星系统分组（`$GP`/`$BD`/`$GL`/`$GA`/`$GI` talker），接收端可准确区分 GPS/北斗/GLONASS/Galileo |
 | 发送频率可调 | 1–10 Hz，滑块实时调节 |
 | 无定位保活 | 无定位时每秒发一帧 `$GPZDA` 时间帧，链路始终有数据流动，断链 1 秒内暴露 |
 | GPS 优先 / 网络兜底 | 「允许网络定位」开启时：GPS 正常只用 GPS；连续 10 秒无 GPS 定位自动切 WiFi/基站兜底，恢复后自动切回 |
-| 断线自动恢复 | 服务器模式断线后回到监听等待重连（读取线程检测对端断开）；客户端模式 5 秒后自动重连 |
+| 断线自动恢复 | 发送端断线后回到监听等待重连；接收端每 5 秒自动重连 |
 | 重复启动防护 | 重复的启动请求会先清理旧流水线，避免两个监听服务并存导致「两端已连接但收不到数据」 |
-| 后台持续传输 | 前台服务 + 常驻通知，切后台/锁屏仍发送，通知内可一键停止 |
+| 后台持续运行 | 前台服务 + 常驻通知，切后台/锁屏仍工作，通知内可一键停止 |
 | 实时运行数据 | 定位状态、卫星数、经纬度、速度、航向、海拔、已发语句、速率、连接设备 |
 | 卫星星图 | 天空雷达（方位/仰角/信噪比）+ 卫星明细列表 |
 | 运行日志 | 实时日志，支持复制、清空、导出；按「普通 / 卫星 / 数据 / 全部」分类筛选 |
 | 最低兼容 Android 7.0 | minSdk 24，覆盖绝大多数在用设备 |
-| 开机自启（可选，默认关） | 开启后每次重启自动按上次的连接方式与设备开始传输 |
-| 链路保活（无定位时） | 无 GPS 定位时每秒发一帧 `$GPZDA` 时间帧，保持链路有数据流动；死链 1 秒内暴露 |
-| 断线自动重连 | 连接断开 / 写入失败后 5 秒自动重新监听或重连，服务不再因断链退出 |
+| 开机自启（可选，默认关） | 开启后每次重启自动按上次的传输方式与设备开始传输 |
+
+---
+
+## ⚠️ 接收端的前置条件（必读）
+
+接收端靠 Android 的**测试位置提供者**把定位注入系统，这要求**接收端设备能在「开发者选项 → 选择模拟位置信息应用」里把本应用选上**：
+
+> 设置 → 关于手机 → 连点「版本号」7 次开启开发者选项
+> 开发者选项 → 选择模拟位置信息应用 → 选「GPS共享」
+
+**进不去开发者选项的定制车机，接收端这条路走不通。** 请先在你的设备上确认这一点再决定是否使用接收端角色。
+
+**已知限制：注入不了卫星星图。** Android 的测试位置提供者不支持 `GnssStatus`，只能注入单点定位。因此：
+
+- 导航 App 里**定位本身正常**，但**卫星数可能显示为 0 / 星图空白**；
+- 本应用自己的「卫星」页在接收端仍能正常显示——数据来自解析的 `GSV` 语句，不依赖系统。
+
+**应用无法自己打开带流量共享的热点**（系统限制）：共享角色下需要你手动在「系统设置 → 个人热点」里打开热点，应用会把检测到的热点地址显示在界面上。
+
+---
 
 ## 技术栈
 
@@ -66,19 +99,19 @@
 **默认状态下没有任何后台自动行为**：
 
 1. `AndroidManifest.xml` 虽声明了 `BootReceiver`，但开机自启开关**默认关闭**，关闭时接收器什么都不做。
-2. 传输服务（`GpsOutputService`）`android:exported="false"`，除了系统 `BOOT_COMPLETED` 与用户点击按钮外，没有其它入口。
-3. 服务使用 `START_NOT_STICKY`，被系统杀掉后**不会**自动重启。
-4. 点「停止传输」或通知里的「停止传输」会立即停止服务、断开蓝牙、释放 GPS 监听；退出界面同样停止。
+2. 传输服务（`GpsOutputService`）与接收服务（`ReceiveService`）都 `android:exported="false"`，除了系统 `BOOT_COMPLETED` 与用户点击按钮外，没有其它入口。
+3. 两个服务都使用 `START_NOT_STICKY`，被系统杀掉后**不会**自动重启。
+4. 点「停止传输」或通知里的「停止传输」会立即停止服务、断开链路、释放资源；退出界面同样停止。
 5. 蓝牙未开启时只弹系统授权对话框，由用户决定是否开启，不会静默开启。
 
-**开启「设置 → 开机自动开始传输」后**，每次重启会按上次的连接方式与设备自动开始传输。约束如下：
+**开启「设置 → 开机自动开始传输」后**，每次重启会按上次的传输方式与设备自动开始传输（**只对共享角色生效，接收角色不自动启动**）。约束如下：
 
 | 系统版本 | 行为 |
 |---|---|
 | Android 7.0 – 11 | 完全自动，无需任何操作 |
 | Android 12 及以上 | 系统**禁止后台启动的前台服务读取定位**。因此开机后服务会先就绪，若 20 秒内拿不到定位，会推送一条「需要手动开始传输」通知，点其中的「开始传输」即刻恢复（此时为前台操作，不受限制） |
 
-开机时若前置条件不满足，不会静默失败，而是推送「开机自动传输未启动」通知并说明原因：未授予定位权限 / 未授予蓝牙连接权限 / 设备没有蓝牙硬件 / 蓝牙未开启 / 未选择目标设备。其中「蓝牙未开启」会先等待蓝牙就绪（最长 60 秒）再决定。
+开机时若前置条件不满足，不会静默失败，而是推送「开机自动传输未启动」通知并说明原因。
 
 > 国产 ROM（小米、OPPO、华为等）可能额外拦截开机自启，需在系统设置中允许本软件「自启动」并关闭电池优化。
 
@@ -91,10 +124,11 @@
 | Android Build Tools | 35.0.0 |
 | Gradle | 8.12（仓库内含 `gradlew`，无需单独安装） |
 
-在 `local.properties` 中指定本机 SDK 路径：
+在 `local.properties` 中指定本机 SDK 路径与构建产物目录：
 
 ```properties
 sdk.dir=C\:\\Users\\<你的用户名>\\AppData\\Local\\Android\\Sdk
+build.dir=C\:/build
 ```
 
 ## 构建
@@ -106,6 +140,12 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew assembleDebug
 产物：`构建目录\app\outputs\apk\debug\app-debug.apk`
 
 > 产物路径由 `local.properties` 的 `build.dir` 决定（见下方「中文路径」一节），未设置时回落到默认的 `app/build/outputs/apk/debug/`。
+
+签名发布版：
+
+```bash
+JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew assembleRelease
+```
 
 安装到已连接的真机：
 
@@ -119,39 +159,41 @@ adb install -r 构建目录/app/outputs/apk/debug/app-debug.apk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest
 ```
 
-覆盖范围（51 个用例）：
+覆盖范围（93 个用例）：
 
 - `NmeaChecksumTest`：XOR 校验和算法（含两个标准样例 `*47` / `*6A`）、两位十六进制补零、`\r\n` 结尾
 - `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关
+- `NmeaParserTest`：**与生成器互为逆运算的往返测试**、半球正负、校验和错误丢弃、GSV 分轮不累积、GSA 标记已用卫星
 - `TransmitEngineTest`：定频写入、时间取自当前时钟、无定位/过期降级、计数器与速率
-- `TransmitterStateTest`：观察者通知、注销后不再通知、默认状态
+- `TransmitterStateTest`：观察者通知、注销后不再通知、多对端增删、默认状态
+- `PeerTest`：对端相等性只按地址、null 归一化
+- `PeerRegistryTest`：多对端广播、单个对端写失败静默剔除且不影响其余、非受检异常同样被隔离
+- `DiscoveryBeaconTest`：信标编解码往返、中文/分隔符转义、非法报文丢弃
+- `HotspotAddressesTest`：热点网卡识别优先级、回环地址排除
+- `ServerTableTest`：过期剔除、排序、跨线程同步契约
 - `LogBusTest`：监听回调、缓冲区上限、时间戳
 - `FormattersTest`：中文数值格式化、时长
 
-测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`
+测试报告：`构建目录\app\reports\tests\testDebugUnitTest\index.html`
 
-> **中文路径提示（Windows）**：工程放在**含中文字符的目录**下时，单元测试会报 `ClassNotFoundException`——JVM 用系统 ANSI 代码页解码 classpath，路径里的中文变成乱码，测试类因此加载不到。本仓库已用**重定向构建产物**的方式解决：在 `local.properties` 中指定一个纯 ASCII 的 `build.dir`，源码留在原地，只有 `build/` 换位置。
->
-> ```properties
-> build.dir=C\:/build
-> ```
->
-> `local.properties` 不入库，所以换机器需各自设置一次；未设置且工程路径含中文时，Gradle 会打印警告。
+> **中文路径提示（Windows）**：工程放在**含中文字符的目录**下时，单元测试会报 `ClassNotFoundException`——JVM 用系统 ANSI 代码页解码 classpath，路径里的中文变成乱码，测试类因此加载不到。本仓库已用**重定向构建产物**的方式解决：在 `local.properties` 中指定一个纯 ASCII 的 `build.dir`，源码留在原地，只有 `build/` 换位置。`local.properties` 不入库，所以换机器需各自设置一次；未设置且工程路径含中文时，Gradle 会打印警告。
 
 ## 权限说明
 
 | 权限 | 适用版本 | 用途 |
 |---|---|---|
-| `ACCESS_FINE_LOCATION` | 全部 | 获取卫星定位（必需） |
+| `ACCESS_FINE_LOCATION` | 全部 | 共享端获取卫星定位；接收端注入模拟位置亦需 |
 | `ACCESS_COARSE_LOCATION` | 全部 | 开启「网络辅助定位」时使用 |
+| `INTERNET` | 全部 | WiFi 传输的 TCP 服务端/客户端与 UDP 服务发现 |
 | `BLUETOOTH` / `BLUETOOTH_ADMIN` | ≤ Android 11 | 旧版蓝牙 |
 | `BLUETOOTH_CONNECT` | ≥ Android 12 | 读取已配对设备名、建立 RFCOMM 连接 |
-| `FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_LOCATION` | 全部 / ≥ 14 | 后台持续传输 |
+| `FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_LOCATION` | 全部 / ≥ 14 | 共享端后台持续传输 |
+| `FOREGROUND_SERVICE_DATA_SYNC` | ≥ 14 | 接收端后台持续接收（不读本机定位，故不用 location 类型） |
 | `POST_NOTIFICATIONS` | ≥ Android 13 | 常驻通知（拒绝时仍可传输，只是看不到状态） |
 | `WRITE_EXTERNAL_STORAGE` | ≤ Android 9 | 导出日志到「下载」目录 |
 | `RECEIVE_BOOT_COMPLETED` | 全部 | 开机自启（开关默认关闭） |
 
-未申请：`BLUETOOTH_SCAN`、`ACCESS_BACKGROUND_LOCATION`、`WAKE_LOCK`。
+未申请：`BLUETOOTH_SCAN`、`ACCESS_BACKGROUND_LOCATION`、`WAKE_LOCK`、`ACCESS_MOCK_LOCATION`（系统签名权限，声明无用——靠开发者选项授权）。
 
 ## 源码结构
 
@@ -159,30 +201,44 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitT
 app/src/main/java/com/gpsbt/transfer/
 ├── MainActivity.java              单 Activity + 底部导航 + 权限入口
 ├── App.java                       Application，装配主线程回调
-├── service/GpsOutputService.java  前台服务主控
+├── link/                          传输层抽象
+│   ├── Link.java                  传输通道接口（start/stop/write/isConnected/resetConnection）
+│   ├── Peer.java                  一个已连接的对端
+│   ├── Transport.java             传输方式：蓝牙 / WiFi
+│   └── Role.java                  角色：共享 / 接收
+├── bt/BluetoothLinkManager.java   蓝牙 SPP 通道（实现 Link，单对端）
+├── net/                           WiFi 通道与服务发现
+│   ├── NetLinkManager.java        TCP 服务端（实现 Link，多对端）
+│   ├── PeerRegistry.java          多对端注册表（广播、失效剔除）
+│   ├── DiscoveryBeacon.java       发现信标编解码
+│   ├── DiscoveryBroadcaster.java  发送端：周期性 UDP 广播
+│   ├── DiscoveryListener.java     接收端：监听信标
+│   ├── ServerTable.java           发现到的发送端表（过期剔除）
+│   └── HotspotAddresses.java      本机 IPv4 枚举与热点网卡识别
+├── rx/                            接收端流水线
+│   ├── NmeaClient.java            TCP 客户端 + 断线重连
+│   ├── NmeaParser.java            NMEA → 定位快照（与生成器互逆）
+│   └── MockLocationInjector.java  注入系统模拟位置
+├── service/
+│   ├── GpsOutputService.java      共享端前台服务
+│   └── ReceiveService.java        接收端前台服务
 ├── engine/TransmitEngine.java     定频发送与统计（纯逻辑，可单测）
 ├── engine/LocationProvider.java   LocationManager / GnssStatus 封装
-├── nmea/                          NMEA 生成与校验（无 Android 依赖）
-│   ├── NmeaGenerator.java
-│   ├── NmeaChecksum.java
-│   ├── NmeaInput.java
-│   └── NmeaSentenceType.java
-├── bt/                            蓝牙 SPP 双模式连接
-│   ├── BluetoothLinkManager.java
-│   ├── ConnectionMode.java
-│   └── BtState.java
+├── nmea/                          NMEA 生成与解析基础（无 Android 依赖）
 ├── state/                         TransmitterState 状态中心 / TransmitStats / LogBus
 ├── ui/fragment/                   Home / Satellite / Log / Settings
 ├── ui/view/                       PulseButtonView / SatelliteRadarView / StatCardView
-├── ui/adapter/                    设备 / 卫星 / 日志列表
+├── ui/adapter/                    设备 / 卫星 / 日志 / 对端 / 服务器列表
 └── util/                          Prefs / Formatters / LogExporter
 ```
 
 ## 真机调试
 
-详见 [docs/USAGE.md](docs/USAGE.md)：安装、两种模式的操作步骤、Windows 接收端如何开串口看数据、常见问题排查。
+详见 [docs/USAGE.md](docs/USAGE.md)：安装、各角色与传输方式的操作步骤、Windows 接收端如何开串口看数据、接收端如何接管系统定位、常见问题排查。
 
 ## 设计文档与实现计划
 
-- 设计：[docs/superpowers/specs/2026-09-23-gps-bluetooth-transmitter-design.md](docs/superpowers/specs/2026-09-23-gps-bluetooth-transmitter-design.md)
-- 实现计划：[docs/superpowers/plans/2026-09-23-gps-bluetooth-transmitter.md](docs/superpowers/plans/2026-09-23-gps-bluetooth-transmitter.md)
+- 设计：[docs/superpowers/specs/2026-10-12-gps-share-wifi-design.md](docs/superpowers/specs/2026-10-12-gps-share-wifi-design.md)
+- P1（骨架 + 传输层抽象）：[docs/superpowers/plans/2026-10-12-gps-share-p1-link-abstraction.md](docs/superpowers/plans/2026-10-12-gps-share-p1-link-abstraction.md)
+- P2（WiFi 发送端）：[docs/superpowers/plans/2026-10-13-gps-share-p2-wifi-sender.md](docs/superpowers/plans/2026-10-13-gps-share-p2-wifi-sender.md)
+- P3（接收端）：[docs/superpowers/plans/2026-10-13-gps-share-p3-receiver.md](docs/superpowers/plans/2026-10-13-gps-share-p3-receiver.md)
