@@ -70,7 +70,7 @@
 
 > `namespace` 与 `applicationId` 分离是 Android 官方支持的用法：前者决定 `R` 类与清单里的包名，后者决定安装身份。
 
-连带影响：蓝牙 SPP 的默认服务名取自 `R.string.app_name`，因此会从 `GPS蓝牙传输` 变为 `GPS共享`。使用方可在设置页改回原值以兼容既有接收端。
+连带影响：蓝牙 SPP 的默认服务名来自 `util/Prefs.DEFAULT_SERVICE_NAME`（不是 `app_name`），本版一并从 `GPS蓝牙传输` 改为 `GPS共享`。接收端若已按旧服务名配置，可在设置页改回原值。
 
 ### 2.3 已知代价
 

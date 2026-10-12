@@ -14,7 +14,7 @@ import java.util.UUID;
 /** 设置持久化。 */
 public final class Prefs {
 
-    public static final String DEFAULT_SERVICE_NAME = "GPS蓝牙传输";
+    public static final String DEFAULT_SERVICE_NAME = "GPS共享";
     public static final String DEFAULT_UUID = "00001101-0000-1000-8000-00805F9B34FB";
     public static final int DEFAULT_RATE_HZ = 1;
     public static final int MAX_RATE_HZ = 10;

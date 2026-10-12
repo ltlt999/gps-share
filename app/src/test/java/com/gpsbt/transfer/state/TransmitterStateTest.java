@@ -40,7 +40,7 @@ public class TransmitterStateTest {
         state.setPhase(Phase.RUNNING);
         state.setBt(Bt.WAITING);
         state.setMode(Mode.SERVER);
-        state.setConfig("GPS蓝牙传输", "00001101-0000-1000-8000-00805F9B34FB", 2);
+        state.setConfig("GPS共享", "00001101-0000-1000-8000-00805F9B34FB", 2);
         state.setStatusText("等待连接");
 
         assertEquals(5, calls.get());
@@ -48,7 +48,7 @@ public class TransmitterStateTest {
         assertEquals(Bt.WAITING, state.bt());
         assertEquals(Mode.SERVER, state.mode());
         assertEquals(2, state.rateHz());
-        assertEquals("GPS蓝牙传输", state.serviceName());
+        assertEquals("GPS共享", state.serviceName());
         assertEquals("等待连接", state.statusText());
         assertSame(state, seen.get(0));
     }

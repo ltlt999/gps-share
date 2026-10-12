@@ -26,7 +26,7 @@ public final class LogExporter {
 
     public static String export(Context context) throws IOException {
         StringBuilder builder = new StringBuilder();
-        builder.append("# GPS蓝牙传输 日志\r\n");
+        builder.append("# GPS共享 日志\r\n");
         for (LogBus.Entry entry : LogBus.get().entries()) {
             builder.append(Formatters.clockOfDay(entry.time))
                     .append("\t").append(entry.level.name())
