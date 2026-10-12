@@ -18,16 +18,22 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.TextInputEditText;
 import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.bt.ConnectionMode;
 import com.gpsbt.transfer.link.Peer;
+import com.gpsbt.transfer.link.Role;
 import com.gpsbt.transfer.link.Transport;
+import com.gpsbt.transfer.net.DiscoveryListener;
 import com.gpsbt.transfer.net.HotspotAddresses;
+import com.gpsbt.transfer.net.ServerTable;
 import com.gpsbt.transfer.service.GpsOutputService;
+import com.gpsbt.transfer.service.ReceiveService;
 import com.gpsbt.transfer.state.TransmitterState;
 import com.gpsbt.transfer.ui.adapter.PairedDeviceAdapter;
 import com.gpsbt.transfer.ui.adapter.PeerAdapter;
+import com.gpsbt.transfer.ui.adapter.ServerAdapter;
 import com.gpsbt.transfer.ui.view.PulseButtonView;
 import com.gpsbt.transfer.ui.view.StatCardView;
 import com.gpsbt.transfer.util.Formatters;
@@ -40,7 +46,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public class HomeFragment extends Fragment
-        implements TransmitterState.Listener, PairedDeviceAdapter.OnDeviceSelected {
+        implements TransmitterState.Listener, PairedDeviceAdapter.OnDeviceSelected,
+        ServerAdapter.OnServerSelected {
 
     private TransmitterState state;
     private Prefs prefs;
@@ -48,6 +55,8 @@ public class HomeFragment extends Fragment
     private PulseButtonView pulseButton;
     private TextView statusBadge;
     private TextView statusText;
+    private MaterialButtonToggleGroup roleGroup;
+    private TextView transportTitle;
     private MaterialButtonToggleGroup transportGroup;
     private TextView modeTitle;
     private MaterialButtonToggleGroup modeGroup;
@@ -66,12 +75,21 @@ public class HomeFragment extends Fragment
     private View peerPanel;
     private RecyclerView peerList;
     private TextView peerEmpty;
+    private View mockCard;
+    private View serverPanel;
+    private RecyclerView serverList;
+    private TextView serverEmpty;
+    private View manualPanel;
+    private TextInputEditText inputHost;
+    private TextInputEditText inputPort;
     private GridLayout statsGrid;
 
     private final List<BluetoothDevice> devices = new ArrayList<BluetoothDevice>();
     private final Map<String, StatCardView> cards = new LinkedHashMap<String, StatCardView>();
     private PairedDeviceAdapter deviceAdapter;
     private PeerAdapter peerAdapter;
+    private ServerAdapter serverAdapter;
+    private DiscoveryListener discoveryListener;
     private String selectedMac;
 
     @Nullable
@@ -94,6 +112,8 @@ public class HomeFragment extends Fragment
         pulseButton = view.findViewById(R.id.pulse_button);
         statusBadge = view.findViewById(R.id.status_badge);
         statusText = view.findViewById(R.id.status_text);
+        roleGroup = view.findViewById(R.id.role_group);
+        transportTitle = view.findViewById(R.id.transport_title);
         transportGroup = view.findViewById(R.id.transport_group);
         modeTitle = view.findViewById(R.id.mode_title);
         modeGroup = view.findViewById(R.id.mode_group);
@@ -112,6 +132,13 @@ public class HomeFragment extends Fragment
         peerPanel = view.findViewById(R.id.peer_panel);
         peerList = view.findViewById(R.id.peer_list);
         peerEmpty = view.findViewById(R.id.peer_empty);
+        mockCard = view.findViewById(R.id.mock_card);
+        serverPanel = view.findViewById(R.id.server_panel);
+        serverList = view.findViewById(R.id.server_list);
+        serverEmpty = view.findViewById(R.id.server_empty);
+        manualPanel = view.findViewById(R.id.manual_panel);
+        inputHost = view.findViewById(R.id.input_host);
+        inputPort = view.findViewById(R.id.input_port);
         statsGrid = view.findViewById(R.id.stats_grid);
 
         StatsGridBuilder.build(statsGrid, cards);
@@ -123,6 +150,27 @@ public class HomeFragment extends Fragment
         peerAdapter = new PeerAdapter();
         peerList.setLayoutManager(new LinearLayoutManager(getContext()));
         peerList.setAdapter(peerAdapter);
+
+        serverAdapter = new ServerAdapter(this);
+        serverList.setLayoutManager(new LinearLayoutManager(getContext()));
+        serverList.setAdapter(serverAdapter);
+
+        inputHost.setText(prefs.getLastServerHost());
+        inputPort.setText(String.valueOf(prefs.getLastServerPort()));
+
+        roleGroup.addOnButtonCheckedListener(
+                new MaterialButtonToggleGroup.OnButtonCheckedListener() {
+                    @Override
+                    public void onButtonChecked(MaterialButtonToggleGroup group, int checkedId,
+                                                boolean isChecked) {
+                        if (!isChecked) {
+                            return;
+                        }
+                        prefs.setRole(checkedId == R.id.role_receive
+                                ? Role.RECEIVE : Role.SHARE);
+                        renderPanels();
+                    }
+                });
 
         transportGroup.addOnButtonCheckedListener(
                 new MaterialButtonToggleGroup.OnButtonCheckedListener() {
@@ -183,6 +231,7 @@ public class HomeFragment extends Fragment
     @Override
     public void onStop() {
         state.removeListener(this);
+        stopDiscoveryListener();
         super.onStop();
     }
 
@@ -201,7 +250,19 @@ public class HomeFragment extends Fragment
         deviceAdapter.setSelectedMac(selectedMac);
     }
 
+    @Override
+    public void onSelected(ServerTable.Server server) {
+        inputHost.setText(server.host);
+        inputPort.setText(String.valueOf(server.port));
+        prefs.setLastServerHost(server.host);
+        prefs.setLastServerPort(server.port);
+    }
+
     private void onPulseClicked() {
+        if (prefs.getRole() == Role.RECEIVE) {
+            onReceivePulseClicked();
+            return;
+        }
         if (state.phase() == TransmitterState.Phase.RUNNING) {
             GpsOutputService.stop(requireContext());
             return;
@@ -223,6 +284,50 @@ public class HomeFragment extends Fragment
                     GpsOutputService.start(requireContext(), prefs.getMode(), selectedMac);
                 }
             });
+        }
+    }
+
+    /** 接收角色：已连接则断开，否则按输入框的地址去连。 */
+    private void onReceivePulseClicked() {
+        if (ReceiveService.isRunning()) {
+            ReceiveService.stop(requireContext());
+            return;
+        }
+        String host = inputHost.getText() == null ? "" : inputHost.getText().toString().trim();
+        if (host.isEmpty()) {
+            new MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(R.string.receive_manual_title)
+                    .setMessage(R.string.receive_host_required)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+            return;
+        }
+        final int port = portOf(inputPort, Prefs.DEFAULT_SERVER_PORT);
+        prefs.setLastServerHost(host);
+        prefs.setLastServerPort(port);
+        inputPort.setText(String.valueOf(port));
+        final String target = host;
+        // 模拟位置注入同样需要定位权限，因此走与发送端相同的授权入口
+        if (getActivity() instanceof HomeCallbacks) {
+            ((HomeCallbacks) getActivity()).requestStartPermissions(new Runnable() {
+                @Override
+                public void run() {
+                    ReceiveService.start(requireContext(), target, port);
+                }
+            });
+        }
+    }
+
+    /** 解析端口输入；非法或越界回落到默认值。 */
+    private static int portOf(TextInputEditText field, int fallback) {
+        if (field.getText() == null) {
+            return fallback;
+        }
+        try {
+            int value = Integer.parseInt(field.getText().toString().trim());
+            return value < Prefs.MIN_PORT || value > Prefs.MAX_PORT ? fallback : value;
+        } catch (NumberFormatException e) {
+            return fallback;
         }
     }
 
@@ -276,12 +381,17 @@ public class HomeFragment extends Fragment
         statusBadge.setTextColor(getResources().getColorStateList(statusColor, null));
         statusText.setText(snapshot.statusText().isEmpty()
                 ? getString(statusTextRes) : snapshot.statusText());
-        pulseButton.setState(running
+        boolean receiveRunning = ReceiveService.isRunning();
+        pulseButton.setState(running || receiveRunning
                 ? PulseButtonView.State.RUNNING : PulseButtonView.State.IDLE);
 
-        // 传输方式是用户偏好，事实源是 Prefs（renderPanels 也读它）——
-        // 两处读同一个源，才不会出现「开关显示蓝牙、面板显示 WiFi」的错位。
+        // 角色与传输方式都是用户偏好，事实源是 Prefs。
         // 先比再 check：check() 会回调监听器，多余调用会把用户的选择写回 Prefs
+        int roleButton = prefs.getRole() == Role.RECEIVE ? R.id.role_receive : R.id.role_share;
+        if (roleGroup.getCheckedButtonId() != roleButton) {
+            roleGroup.check(roleButton);
+        }
+
         int transportButton = prefs.getTransport() == Transport.WIFI
                 ? R.id.transport_wifi : R.id.transport_bluetooth;
         if (transportGroup.getCheckedButtonId() != transportButton) {
@@ -347,25 +457,61 @@ public class HomeFragment extends Fragment
     }
 
     private void renderPanels() {
+        boolean receive = prefs.getRole() == Role.RECEIVE;
         boolean wifi = prefs.getTransport() == Transport.WIFI;
         boolean client = prefs.getMode() == ConnectionMode.CLIENT;
 
-        transportGroup.setVisibility(View.VISIBLE);
-        modeTitle.setVisibility(wifi ? View.GONE : View.VISIBLE);
-        modeGroup.setVisibility(wifi ? View.GONE : View.VISIBLE);
-        modeHint.setVisibility(wifi ? View.GONE : View.VISIBLE);
+        transportTitle.setVisibility(receive ? View.GONE : View.VISIBLE);
+        transportGroup.setVisibility(receive ? View.GONE : View.VISIBLE);
+        modeTitle.setVisibility(receive || wifi ? View.GONE : View.VISIBLE);
+        modeGroup.setVisibility(receive || wifi ? View.GONE : View.VISIBLE);
+        modeHint.setVisibility(receive || wifi ? View.GONE : View.VISIBLE);
 
-        serviceCard.setVisibility(!wifi && !client ? View.VISIBLE : View.GONE);
-        devicePanel.setVisibility(!wifi && client ? View.VISIBLE : View.GONE);
+        serviceCard.setVisibility(!receive && !wifi && !client ? View.VISIBLE : View.GONE);
+        devicePanel.setVisibility(!receive && !wifi && client ? View.VISIBLE : View.GONE);
+        wifiCard.setVisibility(!receive && wifi ? View.VISIBLE : View.GONE);
+        peerPanel.setVisibility(!receive && wifi ? View.VISIBLE : View.GONE);
 
-        wifiCard.setVisibility(wifi ? View.VISIBLE : View.GONE);
-        peerPanel.setVisibility(wifi ? View.VISIBLE : View.GONE);
+        mockCard.setVisibility(receive ? View.VISIBLE : View.GONE);
+        serverPanel.setVisibility(receive ? View.VISIBLE : View.GONE);
+        manualPanel.setVisibility(receive ? View.VISIBLE : View.GONE);
 
-        if (wifi) {
-            renderWifiCard();
+        if (receive) {
+            startDiscoveryListener();
         } else {
-            modeHint.setText(client
-                    ? R.string.home_mode_client_hint : R.string.home_mode_server_hint);
+            stopDiscoveryListener();
+            if (wifi) {
+                renderWifiCard();
+            } else {
+                modeHint.setText(client
+                        ? R.string.home_mode_client_hint : R.string.home_mode_server_hint);
+            }
+        }
+    }
+
+    /** 只有接收角色才需要监听服务发现；重复调用安全。 */
+    private void startDiscoveryListener() {
+        if (discoveryListener != null) {
+            return;
+        }
+        discoveryListener = new DiscoveryListener(prefs.getDiscoveryPort(),
+                new DiscoveryListener.Callback() {
+                    @Override
+                    public void onServers(List<ServerTable.Server> servers) {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        serverAdapter.submit(servers);
+                        serverEmpty.setVisibility(servers.isEmpty() ? View.VISIBLE : View.GONE);
+                    }
+                });
+        discoveryListener.start();
+    }
+
+    private void stopDiscoveryListener() {
+        if (discoveryListener != null) {
+            discoveryListener.stop();
+            discoveryListener = null;
         }
     }
 
