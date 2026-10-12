@@ -103,12 +103,14 @@ sdk.dir=C\:\\Users\\<你的用户名>\\AppData\\Local\\Android\\Sdk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew assembleDebug
 ```
 
-产物：`app/build/outputs/apk/debug/app-debug.apk`
+产物：`构建目录\app\outputs\apk\debug\app-debug.apk`
+
+> 产物路径由 `local.properties` 的 `build.dir` 决定（见下方「中文路径」一节），未设置时回落到默认的 `app/build/outputs/apk/debug/`。
 
 安装到已连接的真机：
 
 ```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r 构建目录/app/outputs/apk/debug/app-debug.apk
 ```
 
 ## 运行单元测试
@@ -117,7 +119,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest
 ```
 
-覆盖范围（40 个用例）：
+覆盖范围（51 个用例）：
 
 - `NmeaChecksumTest`：XOR 校验和算法（含两个标准样例 `*47` / `*6A`）、两位十六进制补零、`\r\n` 结尾
 - `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关
@@ -128,7 +130,13 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitT
 
 测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`
 
-> Windows 提示：若把工程放在**含中文字符的目录**下运行单元测试，可能遇到 `ClassNotFoundException`（AGP 在 Windows 上对非 ASCII 路径的已知问题）。此时把工程移到纯英文路径再跑测试即可，普通 APK 构建不受影响。
+> **中文路径提示（Windows）**：工程放在**含中文字符的目录**下时，单元测试会报 `ClassNotFoundException`——JVM 用系统 ANSI 代码页解码 classpath，路径里的中文变成乱码，测试类因此加载不到。本仓库已用**重定向构建产物**的方式解决：在 `local.properties` 中指定一个纯 ASCII 的 `build.dir`，源码留在原地，只有 `build/` 换位置。
+>
+> ```properties
+> build.dir=C\:/build
+> ```
+>
+> `local.properties` 不入库，所以换机器需各自设置一次；未设置且工程路径含中文时，Gradle 会打印警告。
 
 ## 权限说明
 

@@ -1,3 +1,25 @@
 plugins {
     id 'com.android.application' version '8.7.3' apply false
 }
+
+// Windows 中文工程路径下，JVM 以系统 ANSI 代码页解码 classpath，路径里的中文会变成乱码，
+// 单元测试因此报 ClassNotFoundException（Gradle 在 Windows 上的已知问题，见 README）。
+// 把构建产物重定向到纯 ASCII 路径即可绕开：源码留在原地，只有 build/ 换位置。
+// 目标位置由 local.properties 的 build.dir 指定；该文件不入库，所以其他机器不受影响，
+// 未指定时保持默认的 build/ 目录。
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def buildRoot = localProps.getProperty('build.dir')
+if (buildRoot) {
+    allprojects {
+        layout.buildDirectory = new File(buildRoot, project.name)
+    }
+} else if (rootProject.projectDir.absolutePath !=
+        rootProject.projectDir.absolutePath.replaceAll('[^\\x00-\\x7F]', '')) {
+    logger.warn('工程路径含非 ASCII 字符，且 local.properties 未指定 build.dir —— ' +
+            '单元测试会因 classpath 乱码报 ClassNotFoundException。' +
+            '请在 local.properties 中加上 build.dir=<纯 ASCII 路径>。')
+}
