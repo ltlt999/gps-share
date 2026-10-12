@@ -225,7 +225,7 @@ import java.io.IOException;
 public interface Link {
 
     /** 通道状态。顺序必须与 `state.TransmitterState.Bt` 一致。 */
-    enum State { IDLE, WAITING, CONNECTING, CONNECTED, DISCONNECTED, FAILED }
+    enum State { IDLE, WAITING, CONNECTING, CONNECTED, FAILED, DISCONNECTED }
 
     interface Listener {
 
