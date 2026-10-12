@@ -7,7 +7,11 @@ import java.io.IOException;
  *
  * 蓝牙（SPP，单对端）与 WiFi（TCP 服务端，多对端）都实现本接口，
  * 发送侧（TransmitEngine / GpsOutputService）只依赖接口，不关心底层是什么。
- * 回调由实现方决定在哪个线程触发（蓝牙实现切到主线程）。
+ *
+ * 线程约定：目前回调线程由实现方决定，调用方**不能假定回调在主线程**。
+ * 蓝牙实现的 onState / onPeerLeft 经 Handler 投递到主线程，而 onPeerJoined
+ * 由 accept / connect 工作线程直接调用（沿用 v1.4.6 行为）。P2 引入多对端时
+ * 需把这条收敛成硬性要求，否则每个回调点都要重新审一遍线程安全。
  */
 public interface Link {
 

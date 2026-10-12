@@ -89,13 +89,13 @@ package com.gpsbt.transfer.link;
 
 /** 一条把 NMEA 字节流送出去的传输通道。 */
 public interface Link {
-    /** 通道状态。取值与现有 BtState 一致，改名以示通用。 */
-    enum State { IDLE, WAITING, CONNECTING, CONNECTED, DISCONNECTED, FAILED }
+    /** 通道状态。顺序与现有 state.TransmitterState.Bt 一致。 */
+    enum State { IDLE, WAITING, CONNECTING, CONNECTED, FAILED, DISCONNECTED }
 
     interface Listener {
         void onState(State state, String message);
-        void onPeerJoined(Peer peer);     // 一个接收端接入
-        void onPeerLeft(Peer peer);       // 一个接收端离开
+        void onPeerJoined(Peer peer);              // 一个接收端接入
+        void onPeerLeft(Peer peer, String reason); // 一个接收端离开
     }
 
     void start();
@@ -104,6 +104,8 @@ public interface Link {
     void write(byte[] data) throws IOException;
     /** 是否至少有一个接收端在线。 */
     boolean isConnected();
+    /** 断开当前所有接收端，通道本身继续监听 / 可重连。 */
+    void resetConnection();
 }
 
 /** 一个已连接的对端（蓝牙设备或 TCP 客户端）。 */
