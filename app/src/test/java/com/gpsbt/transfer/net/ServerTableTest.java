@@ -75,4 +75,20 @@ public class ServerTableTest {
 
         assertEquals(0, table.size());
     }
+
+    /**
+     * upsert 在 UDP 接收线程调用、snapshot 在轮询线程调用，两者同时操作
+     * 同一个 LinkedHashMap 会抛 ConcurrentModificationException。
+     *
+     * 并发缺陷没法用单测稳定复现，因此这里直接断言「方法带 synchronized」——
+     * 结构断言不如行为断言漂亮，但它是唯一能确定性锁住这条契约的方式。
+     */
+    @Test
+    public void mutatingMethodsAreSynchronizedForCrossThreadUse() throws Exception {
+        assertTrue(java.lang.reflect.Modifier.isSynchronized(
+                ServerTable.class.getMethod("upsert", String.class, int.class,
+                        String.class, long.class).getModifiers()));
+        assertTrue(java.lang.reflect.Modifier.isSynchronized(
+                ServerTable.class.getMethod("snapshot", long.class).getModifiers()));
+    }
 }

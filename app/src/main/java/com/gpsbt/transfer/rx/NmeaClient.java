@@ -124,7 +124,11 @@ public final class NmeaClient {
         main.post(new Runnable() {
             @Override
             public void run() {
-                callback.onConnectionChanged(connected, message);
+                // stop() 之后不再回调：服务已经清了状态，
+                // 此时再报「连接已断开」会污染停止后的界面
+                if (running) {
+                    callback.onConnectionChanged(connected, message);
+                }
             }
         });
     }

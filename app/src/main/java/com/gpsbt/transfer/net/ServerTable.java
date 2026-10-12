@@ -39,8 +39,14 @@ public final class ServerTable {
         this.ttlMillis = Math.max(1L, ttlMillis);
     }
 
-    /** 记下一条信标；同一 host:port 覆盖更新时间。 */
-    public void upsert(String host, int port, String name, long now) {
+    /**
+     * 记下一条信标；同一 host:port 覆盖更新时间。
+     *
+     * 方法整体同步：{@link #upsert} 在 UDP 接收线程调用，{@link #snapshot}
+     * 在轮询线程调用，两者同时操作同一个 LinkedHashMap 会抛
+     * ConcurrentModificationException。
+     */
+    public synchronized void upsert(String host, int port, String name, long now) {
         if (host == null || host.trim().isEmpty() || port <= 0 || port > 65535) {
             return;
         }
@@ -49,7 +55,7 @@ public final class ServerTable {
     }
 
     /** 当前仍在线的服务器，按 host 再按 port 排序；同时剔除过期项。 */
-    public List<Server> snapshot(long now) {
+    public synchronized List<Server> snapshot(long now) {
         List<Server> alive = new ArrayList<>();
         List<String> expired = new ArrayList<>();
         for (Server server : servers.values()) {
@@ -72,11 +78,11 @@ public final class ServerTable {
         return alive;
     }
 
-    public int size() {
+    public synchronized int size() {
         return servers.size();
     }
 
-    public void clear() {
+    public synchronized void clear() {
         servers.clear();
     }
 }
