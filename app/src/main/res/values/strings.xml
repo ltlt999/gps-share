@@ -114,6 +114,12 @@
     <string name="settings_rate">发送频率</string>
     <string name="settings_rate_value">%1$d Hz</string>
     <string name="settings_sentences">NMEA 语句</string>
+    <string name="settings_wifi_title">WiFi 传输</string>
+    <string name="settings_wifi_port">TCP 端口</string>
+    <string name="settings_wifi_port_desc">接收端连本机热点后，用这个端口接收数据。默认 10110 是 NMEA over TCP 的惯例端口。</string>
+    <string name="settings_discovery">允许接收端自动发现</string>
+    <string name="settings_discovery_desc">开启后本机每秒广播一次 UDP 信标，接收端无需手动输入 IP。</string>
+    <string name="settings_discovery_port">发现端口</string>
     <string name="settings_service_title">蓝牙服务</string>
     <string name="settings_location_title">定位来源</string>
     <string name="settings_allow_network">允许网络辅助定位</string>

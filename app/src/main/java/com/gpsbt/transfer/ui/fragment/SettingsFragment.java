@@ -43,6 +43,9 @@ public class SettingsFragment extends Fragment {
     private Slider hdopSlider;
     private TextView hdopValue;
     private TextView about;
+    private TextInputEditText inputWifiPort;
+    private MaterialSwitch swDiscovery;
+    private TextInputEditText inputDiscoveryPort;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -75,6 +78,9 @@ public class SettingsFragment extends Fragment {
         staleValue = view.findViewById(R.id.stale_value);
         hdopSlider = view.findViewById(R.id.hdop_slider);
         hdopValue = view.findViewById(R.id.hdop_value);
+        inputWifiPort = view.findViewById(R.id.input_wifi_port);
+        swDiscovery = view.findViewById(R.id.sw_discovery);
+        inputDiscoveryPort = view.findViewById(R.id.input_discovery_port);
         about = view.findViewById(R.id.about_body);
 
         about.setText(getString(R.string.settings_about_body, versionName()));
@@ -183,6 +189,38 @@ public class SettingsFragment extends Fragment {
                 hdopValue.setText(getString(R.string.settings_hdop_value, value));
             }
         });
+
+        inputWifiPort.setText(String.valueOf(prefs.getWifiPort()));
+        inputWifiPort.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                if (!hasFocus) {
+                    prefs.setWifiPort(portOf(inputWifiPort, Prefs.DEFAULT_WIFI_PORT));
+                    inputWifiPort.setText(String.valueOf(prefs.getWifiPort()));
+                }
+            }
+        });
+
+        swDiscovery.setChecked(prefs.isDiscoveryEnabled());
+        swDiscovery.setOnCheckedChangeListener(new MaterialSwitch.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(@NonNull android.widget.CompoundButton buttonView,
+                                         boolean isChecked) {
+                prefs.setDiscoveryEnabled(isChecked);
+            }
+        });
+
+        inputDiscoveryPort.setText(String.valueOf(prefs.getDiscoveryPort()));
+        inputDiscoveryPort.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                if (!hasFocus) {
+                    prefs.setDiscoveryPort(
+                            portOf(inputDiscoveryPort, Prefs.DEFAULT_DISCOVERY_PORT));
+                    inputDiscoveryPort.setText(String.valueOf(prefs.getDiscoveryPort()));
+                }
+            }
+        });
     }
 
     private static String textOf(TextInputEditText field, String fallback) {
@@ -191,6 +229,19 @@ public class SettingsFragment extends Fragment {
         }
         String value = field.getText().toString();
         return value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    /** 解析端口输入；非法或越界时回落到默认值（Prefs 会再做一次钳制）。 */
+    private static int portOf(TextInputEditText field, int fallback) {
+        if (field.getText() == null) {
+            return fallback;
+        }
+        try {
+            int value = Integer.parseInt(field.getText().toString().trim());
+            return value < Prefs.MIN_PORT || value > Prefs.MAX_PORT ? fallback : value;
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private void saveSentences() {
