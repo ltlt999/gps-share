@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            style="@style/TextAppearance.GpsBt.Title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/settings_title" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/card_background"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SettingsRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_rate" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/rate_slider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stepSize="1"
+                android:valueFrom="1"
+                android:valueTo="10"
+                app:labelBehavior="gone"
+                app:thumbColor="@color/color_primary"
+                app:trackColorActive="@color/color_primary"
+                app:trackColorInactive="@color/color_card_stroke" />
+
+            <TextView
+                android:id="@+id/rate_value"
+                style="@style/ValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_background"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_autostart_section" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_autostart"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_autostart" />
+
+            <TextView
+                style="@style/TextSecondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_autostart_desc"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_background"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_sentences" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_gga"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="$GPGGA 定位信息" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_rmc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="$GPRMC 推荐定位" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_gsa"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="$GPGSA 精度因子" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_gsv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="$GPGSV 可见卫星" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_vtg"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="$GPVTG 速度航向" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_background"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_service_title" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/home_service_name">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/input_service_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textColor="@color/color_text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/home_service_uuid">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/input_uuid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textColor="@color/color_text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <Button
+                android:id="@+id/btn_restore_defaults"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_defaults"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_background"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_location_title" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_allow_network"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_allow_network" />
+
+            <TextView
+                style="@style/TextSecondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_allow_network_desc"
+                android:textSize="11sp" />
+
+            <TextView
+                style="@style/SettingsRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/settings_stale" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/stale_slider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stepSize="1"
+                android:valueFrom="2"
+                android:valueTo="30"
+                app:labelBehavior="gone"
+                app:thumbColor="@color/color_primary"
+                app:trackColorActive="@color/color_primary"
+                app:trackColorInactive="@color/color_card_stroke" />
+
+            <TextView
+                android:id="@+id/stale_value"
+                style="@style/ValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp" />
+
+            <TextView
+                style="@style/SettingsRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/settings_hdop" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/hdop_slider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stepSize="0.1"
+                android:valueFrom="0.5"
+                android:valueTo="9.9"
+                app:labelBehavior="gone"
+                app:thumbColor="@color/color_primary"
+                app:trackColorActive="@color/color_primary"
+                app:trackColorInactive="@color/color_card_stroke" />
+
+            <TextView
+                android:id="@+id/hdop_value"
+                style="@style/ValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_background"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_about_title" />
+
+            <TextView
+                android:id="@+id/about_body"
+                style="@style/TextSecondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

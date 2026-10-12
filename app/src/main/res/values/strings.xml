@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GPS蓝牙传输</string>
+
+    <!-- 底部导航 -->
+    <string name="nav_home">传输</string>
+    <string name="nav_satellite">卫星</string>
+    <string name="nav_log">日志</string>
+    <string name="nav_settings">设置</string>
+
+    <!-- 主页 -->
+    <string name="home_title">GPS蓝牙传输</string>
+    <string name="home_subtitle">NMEA 0183 蓝牙串口输出</string>
+    <string name="home_mode_title">连接方式</string>
+    <string name="home_mode_server">等待被连接</string>
+    <string name="home_mode_client">主动连接</string>
+    <string name="home_mode_server_hint">手机作为蓝牙串口服务端，由对方设备发起连接</string>
+    <string name="home_mode_client_hint">由手机主动连接下方选中的已配对设备</string>
+    <string name="home_devices_title">已配对设备</string>
+    <string name="home_devices_empty">没有已配对设备，请先到「系统设置 → 蓝牙」中配对</string>
+    <string name="home_devices_refresh">刷新列表</string>
+    <string name="home_service_title">串口服务信息</string>
+    <string name="home_service_name">服务名称</string>
+    <string name="home_service_uuid">SPP UUID</string>
+    <string name="home_stats_title">运行数据</string>
+    <string name="home_btn_start">开始传输</string>
+    <string name="home_btn_stop">停止传输</string>
+    <string name="home_note">默认不自动运行；开启「设置 → 开机自动开始传输」后，开机或打开本软件都会自动开始传输。</string>
+
+    <!-- 状态文案 -->
+    <string name="state_idle">未开始</string>
+    <string name="state_waiting">等待设备连接</string>
+    <string name="state_connecting">正在连接…</string>
+    <string name="state_connected">已连接，发送中</string>
+    <string name="state_failed">连接失败</string>
+    <string name="state_no_fix">暂无定位</string>
+    <string name="state_bluetooth_off">蓝牙未开启</string>
+
+    <!-- 数据卡片标题 -->
+    <string name="stat_fix">定位状态</string>
+    <string name="stat_satellites">卫星数量</string>
+    <string name="stat_latitude">纬度</string>
+    <string name="stat_longitude">经度</string>
+    <string name="stat_speed">对地速度</string>
+    <string name="stat_bearing">航向</string>
+    <string name="stat_altitude">海拔高度</string>
+    <string name="stat_sentences">已发送语句</string>
+    <string name="stat_rate">发送速率</string>
+    <string name="stat_device">连接设备</string>
+
+    <!-- 数值 -->
+    <string name="value_no_fix">无定位</string>
+    <string name="value_fixed">已定位</string>
+    <string name="value_unknown">--</string>
+    <string name="unit_satellites">颗</string>
+    <string name="unit_rate">句/秒</string>
+    <string name="unit_knots">节</string>
+
+    <!-- 卫星页 -->
+    <string name="satellite_title">卫星状态</string>
+    <string name="satellite_radar_empty">等待卫星信号…</string>
+    <string name="satellite_list_title">卫星明细</string>
+    <string name="satellite_col_prn">编号</string>
+    <string name="satellite_col_snr">信噪比</string>
+    <string name="satellite_col_used">已用于定位</string>
+    <string name="satellite_yes">是</string>
+    <string name="satellite_no">否</string>
+    <string name="satellite_empty">暂无卫星数据</string>
+
+    <!-- 日志页 -->
+    <string name="log_title">运行日志</string>
+    <string name="log_copy">复制</string>
+    <string name="log_clear">清空</string>
+    <string name="log_export">导出</string>
+    <string name="log_empty">暂无日志</string>
+    <string name="log_copied">日志已复制到剪贴板</string>
+    <string name="log_exported">日志已导出到：%1$s</string>
+    <string name="log_export_failed">导出失败：%1$s</string>
+    <string name="log_filter_normal">普通</string>
+    <string name="log_filter_satellite">卫星</string>
+    <string name="log_filter_data">数据</string>
+    <string name="log_filter_all">全部</string>
+
+    <!-- 设置页 -->
+
+    <string name="settings_autostart_section">开机自启</string>
+    <string name="settings_autostart">开机自动开始传输</string>
+    <string name="settings_autostart_desc">开启后，按上一次的连接方式与设备自动开始传输，触发时机有两个：① 开机时（收到开机广播）；② 每次打开本软件。关闭时只在手动点击「开始传输」后传输。
+
+车机提示：若车机系统只把软件界面拉起来、不发开机广播，靠第 ② 个时机也能自动开始；同时建议在车机系统设置里允许本软件「自启动」并关闭电池优化。</string>
+    <string name="boot_blocked_title">自动传输未启动</string>
+    <string name="boot_blocked_body">原因：%1$s</string>
+    <string name="boot_channel_name">开机自启提示</string>
+    <string name="boot_reason_location">未授予定位权限</string>
+    <string name="boot_reason_bluetooth_permission">未授予蓝牙连接权限</string>
+    <string name="boot_reason_no_bluetooth">设备没有蓝牙硬件</string>
+    <string name="boot_reason_bluetooth_off">蓝牙未开启</string>
+    <string name="boot_reason_no_device">未选择要连接的蓝牙设备</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_rate">发送频率</string>
+    <string name="settings_rate_value">%1$d Hz</string>
+    <string name="settings_sentences">NMEA 语句</string>
+    <string name="settings_service_title">蓝牙服务</string>
+    <string name="settings_location_title">定位来源</string>
+    <string name="settings_allow_network">允许网络辅助定位</string>
+    <string name="settings_allow_network_desc">关闭时仅使用 GPS 卫星定位，位置更精确但首次定位更慢</string>
+    <string name="settings_stale">无定位判定超时</string>
+    <string name="settings_stale_value">%1$d 秒</string>
+    <string name="settings_hdop">HDOP 基准值</string>
+    <string name="settings_hdop_value">%.1f</string>
+    <string name="settings_defaults">恢复默认</string>
+    <string name="settings_about_title">关于</string>
+    <string name="settings_about_body">GPS蓝牙传输 %1$s\n把本机 GPS 定位以标准 NMEA 0183 格式通过蓝牙串口输出给其他设备。\n\n本软件默认不自动运行；如需自动开始传输，请在设置中开启「开机自动开始传输」（默认关闭）。开启后开机或打开本软件都会自动开始传输。停止传输后立即释放蓝牙与 GPS 资源。</string>
+
+    <!-- 权限 -->
+    <string name="perm_location_title">需要定位权限</string>
+    <string name="perm_location_rationale">获取卫星定位数据是 GPS 输出的前提，请授予「精确位置」权限。</string>
+    <string name="perm_bluetooth_rationale">需要通过蓝牙发送数据，请授予「附近的设备」权限。</string>
+    <string name="perm_notification_rationale">开启常驻通知，便于随时查看传输状态并一键停止。</string>
+    <string name="perm_grant">去授权</string>
+
+    <!-- 通知 -->
+    <string name="channel_transmit_name">GPS蓝牙传输服务</string>
+    <string name="channel_transmit_desc">显示 GPS 蓝牙传输的运行状态</string>
+    <string name="notif_waiting">等待设备连接…</string>
+    <string name="notif_sending">正在发送 GPS 数据</string>
+    <string name="notif_no_fix">无定位信号</string>
+    <string name="notif_connected_to">已连接：%1$s</string>
+    <string name="notif_stats">已发送 %1$d 句 / %2$s</string>
+    <string name="notif_action_stop">停止传输</string>
+    <string name="notif_action_start">开始传输</string>
+    <string name="notif_restricted_title">需要手动开始传输</string>
+    <string name="notif_restricted_body">Android 12 及以上系统不允许开机自启的服务在后台读取定位，已暂停。点「开始传输」即可立即恢复（此时为前台操作，不受限制）。</string>
+</resources>

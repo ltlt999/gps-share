@@ -1,0 +1,29 @@
+# Gradle / Android 构建产物
+.gradle/
+build/
+app/build/
+captures/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# 本机 SDK 路径，切勿入库
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# 签名密钥与凭据：绝不出现在仓库里
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# 日志与临时文件
+*.log
+*.tmp

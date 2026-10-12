@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="StatCardView">
+        <attr name="cardTitle" format="string" />
+        <attr name="cardValue" format="string" />
+        <attr name="cardUnit" format="string" />
+        <attr name="cardIcon" format="reference" />
+    </declare-styleable>
+
+    <declare-styleable name="PulseButtonView">
+        <attr name="pbIdleText" format="string" />
+        <attr name="pbRunningText" format="string" />
+        <attr name="pbState" format="enum">
+            <enum name="idle" value="0" />
+            <enum name="running" value="1" />
+        </attr>
+    </declare-styleable>
+</resources>
