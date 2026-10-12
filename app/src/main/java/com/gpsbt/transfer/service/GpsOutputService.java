@@ -378,7 +378,7 @@ public class GpsOutputService extends Service {
             state.setPendingDevice(new TransmitterState.Device(
                     BluetoothLinkManager.displayName(device), deviceMac));
         }
-        link = new BluetoothLinkManager(this, adapter, prefs.getServiceName(),
+        link = new BluetoothLinkManager(adapter, prefs.getServiceName(),
                 UUID.fromString(prefs.getUuid()), mode, device, linkListener);
         if (mode == ConnectionMode.SERVER) {
             state.setStatusText("蓝牙服务启动中…");

@@ -13,9 +13,9 @@ import android.os.Looper;
 
 import androidx.core.content.ContextCompat;
 
-import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.link.Link;
 import com.gpsbt.transfer.link.Peer;
+import com.gpsbt.transfer.util.Prefs;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,13 +50,14 @@ public final class BluetoothLinkManager implements Link {
     private BluetoothSocket socket;
     private OutputStream out;
 
-    public BluetoothLinkManager(Context context, BluetoothAdapter adapter,
+    public BluetoothLinkManager(BluetoothAdapter adapter,
                                 String serviceName, UUID uuid,
                                 ConnectionMode mode, BluetoothDevice target,
                                 Link.Listener listener) {
-        String fallback = context.getString(R.string.app_name);
+        // 服务名的唯一事实源是 Prefs：这里不再兜底到 R.string.app_name，
+        // 否则应用改名时 SDP 记录会与设置页显示的默认值悄悄分叉
         this.serviceName = serviceName == null || serviceName.trim().isEmpty()
-                ? fallback : serviceName;
+                ? Prefs.DEFAULT_SERVICE_NAME : serviceName;
         this.adapter = adapter;
         this.uuid = uuid == null ? FALLBACK_UUID : uuid;
         this.mode = mode == null ? ConnectionMode.SERVER : mode;

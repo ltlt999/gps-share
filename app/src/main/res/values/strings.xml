@@ -121,7 +121,7 @@
 
     <!-- 通知 -->
     <string name="channel_transmit_name">GPS共享服务</string>
-    <string name="channel_transmit_desc">显示 GPS 蓝牙传输的运行状态</string>
+    <string name="channel_transmit_desc">显示 GPS共享的运行状态</string>
     <string name="notif_waiting">等待设备连接…</string>
     <string name="notif_sending">正在发送 GPS 数据</string>
     <string name="notif_no_fix">无定位信号</string>

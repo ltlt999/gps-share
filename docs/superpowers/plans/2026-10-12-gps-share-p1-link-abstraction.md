@@ -668,10 +668,10 @@ grep -n "GPS蓝牙传输" app/src/main/res/values/strings.xml
     <string name="channel_transmit_name">GPS共享服务</string>
 ```
 
-改完再跑一次 grep，预期**无输出**：
+改完再跑一次 grep（**必须同时查带空格的写法**——`channel_transmit_desc` 里写的是「GPS 蓝牙传输」，只查不带空格的会漏掉），预期**无输出**：
 
 ```bash
-grep -rn "GPS蓝牙传输" app/src/main/res/ || echo "(无残留)"
+grep -rn "GPS蓝牙传输\|GPS 蓝牙传输" app/src/ || echo "(无残留)"
 ```
 
 > 其余含「蓝牙」的文案**不要改**——蓝牙仍是支持的传输方式（如「通过蓝牙串口输出」这句在 P1 阶段仍然准确，P2 加入 WiFi 后再更新）。
@@ -755,6 +755,21 @@ git commit -m "docs: P1 蓝牙回归验收记录"
 > 执行完成后填写：日期、真机型号、Android 版本、逐项结果、发现的问题。
 
 （待填）
+
+---
+
+## 执行偏离记录
+
+计划执行过程中对本文档正文做出的修正，逐条记下原因，便于日后追溯。
+
+| 位置 | 计划原文 | 实际做法 | 原因 |
+|---|---|---|---|
+| Task 2 | `Link.State` 写成 `…CONNECTED, DISCONNECTED, FAILED` | `…CONNECTED, FAILED, DISCONNECTED` | 与仓库既有 `bt.BtState` / `state.TransmitterState.Bt` 的顺序对齐；原计划是笔误 |
+| Task 4 Step 2 | 只列了 2 处旧应用名 | 实为 4 处，后又补出 2 处 Java 常量与 1 处带空格写法，共 7 处 | 原计划靠肉眼列举，漏了 `settings_about_body`、`channel_transmit_name`、`Prefs.DEFAULT_SERVICE_NAME`、`LogExporter` 日志头、`channel_transmit_desc`（写法带空格） |
+| Task 3 Step 1e | 构造器保留 `Context context`，服务名兜底用 `R.string.app_name` | 去掉 `Context` 参数，兜底改用 `Prefs.DEFAULT_SERVICE_NAME` | 代码审查发现服务名有两个事实源：应用改名时 SDP 记录会与设置页显示的默认值分叉 |
+| Task 4 设计文档 | 「服务名取自 `R.string.app_name`」 | 更正为「取自 `Prefs.DEFAULT_SERVICE_NAME`」 | 原文对机制的描述有误 |
+
+**连带更新**：`GpsOutputService.connectLink` 的构造调用相应去掉了 `this` 参数。
 
 ---
 
