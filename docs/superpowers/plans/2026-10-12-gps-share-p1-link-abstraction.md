@@ -641,9 +641,16 @@ onPeerJoined/onPeerLeft。行为与 v1.4.6 完全一致。"
 grep -n "GPS蓝牙传输" app/src/main/res/values/strings.xml
 ```
 
-预期看到 `app_name` 与 `home_title` 两行。
+预期看到 **4** 行，全部要改：
 
-把这两行的值改为 `GPS共享`：
+| 行 | 资源名 | 用途 |
+|---|---|---|
+| 3 | `app_name` | 桌面图标名 |
+| 12 | `home_title` | 主页标题 |
+| 113 | `settings_about_body` | 关于页首行（应用名 + 版本号） |
+| 123 | `channel_transmit_name` | 通知渠道名（系统设置里可见） |
+
+把这 4 行的 `GPS蓝牙传输` 改为 `GPS共享`：
 
 ```xml
     <string name="app_name">GPS共享</string>
@@ -653,7 +660,21 @@ grep -n "GPS蓝牙传输" app/src/main/res/values/strings.xml
     <string name="home_title">GPS共享</string>
 ```
 
-> 其余含「蓝牙」的文案**不要改**——蓝牙仍是支持的传输方式。
+```xml
+    <string name="settings_about_body">GPS共享 %1$s\n把本机 GPS 定位以标准 NMEA 0183 格式通过蓝牙串口输出给其他设备。…</string>
+```
+
+```xml
+    <string name="channel_transmit_name">GPS共享服务</string>
+```
+
+改完再跑一次 grep，预期**无输出**：
+
+```bash
+grep -rn "GPS蓝牙传输" app/src/main/res/ || echo "(无残留)"
+```
+
+> 其余含「蓝牙」的文案**不要改**——蓝牙仍是支持的传输方式（如「通过蓝牙串口输出」这句在 P1 阶段仍然准确，P2 加入 WiFi 后再更新）。
 
 - [ ] **Step 3: 构建并确认 APK 身份正确**
 

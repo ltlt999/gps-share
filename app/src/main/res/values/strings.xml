@@ -110,7 +110,7 @@
     <string name="settings_hdop_value">%.1f</string>
     <string name="settings_defaults">恢复默认</string>
     <string name="settings_about_title">关于</string>
-    <string name="settings_about_body">GPS蓝牙传输 %1$s\n把本机 GPS 定位以标准 NMEA 0183 格式通过蓝牙串口输出给其他设备。\n\n本软件默认不自动运行；如需自动开始传输，请在设置中开启「开机自动开始传输」（默认关闭）。开启后开机或打开本软件都会自动开始传输。停止传输后立即释放蓝牙与 GPS 资源。</string>
+    <string name="settings_about_body">GPS共享 %1$s\n把本机 GPS 定位以标准 NMEA 0183 格式通过蓝牙串口输出给其他设备。\n\n本软件默认不自动运行；如需自动开始传输，请在设置中开启「开机自动开始传输」（默认关闭）。开启后开机或打开本软件都会自动开始传输。停止传输后立即释放蓝牙与 GPS 资源。</string>
 
     <!-- 权限 -->
     <string name="perm_location_title">需要定位权限</string>
@@ -120,7 +120,7 @@
     <string name="perm_grant">去授权</string>
 
     <!-- 通知 -->
-    <string name="channel_transmit_name">GPS蓝牙传输服务</string>
+    <string name="channel_transmit_name">GPS共享服务</string>
     <string name="channel_transmit_desc">显示 GPS 蓝牙传输的运行状态</string>
     <string name="notif_waiting">等待设备连接…</string>
     <string name="notif_sending">正在发送 GPS 数据</string>
