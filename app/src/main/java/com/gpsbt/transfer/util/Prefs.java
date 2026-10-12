@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.gpsbt.transfer.bt.ConnectionMode;
+import com.gpsbt.transfer.link.Role;
 import com.gpsbt.transfer.link.Transport;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
 
@@ -26,6 +27,8 @@ public final class Prefs {
     public static final boolean DEFAULT_AUTO_START = false;
     /** WiFi 通道默认端口：NMEA over TCP 的行业惯例端口。 */
     public static final int DEFAULT_WIFI_PORT = 10110;
+    /** 接收端默认连接端口，与发送端默认值一致。 */
+    public static final int DEFAULT_SERVER_PORT = DEFAULT_WIFI_PORT;
     /** 服务发现默认端口。 */
     public static final int DEFAULT_DISCOVERY_PORT = 10111;
     public static final int MIN_PORT = 1024;
@@ -46,6 +49,9 @@ public final class Prefs {
     private static final String KEY_WIFI_PORT = "wifi_port";
     private static final String KEY_DISCOVERY_ENABLED = "discovery_enabled";
     private static final String KEY_DISCOVERY_PORT = "discovery_port";
+    private static final String KEY_ROLE = "role";
+    private static final String KEY_LAST_SERVER_HOST = "last_server_host";
+    private static final String KEY_LAST_SERVER_PORT = "last_server_port";
 
     private static volatile Prefs instance;
     private final SharedPreferences prefs;
@@ -216,6 +222,38 @@ public final class Prefs {
 
     public void setDiscoveryPort(int value) {
         prefs.edit().putInt(KEY_DISCOVERY_PORT, clampInt(MIN_PORT, MAX_PORT, value)).apply();
+    }
+
+    public Role getRole() {
+        String name = prefs.getString(KEY_ROLE, Role.SHARE.name());
+        try {
+            return Role.valueOf(name);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return Role.SHARE;
+        }
+    }
+
+    public void setRole(Role value) {
+        prefs.edit().putString(KEY_ROLE, (value == null ? Role.SHARE : value).name()).apply();
+    }
+
+    /** 上次连接的接收端服务器地址；没有则返回空串。 */
+    public String getLastServerHost() {
+        String host = prefs.getString(KEY_LAST_SERVER_HOST, "");
+        return host == null ? "" : host.trim();
+    }
+
+    public void setLastServerHost(String value) {
+        prefs.edit().putString(KEY_LAST_SERVER_HOST, value == null ? "" : value.trim()).apply();
+    }
+
+    public int getLastServerPort() {
+        return clampInt(MIN_PORT, MAX_PORT,
+                prefs.getInt(KEY_LAST_SERVER_PORT, DEFAULT_SERVER_PORT));
+    }
+
+    public void setLastServerPort(int value) {
+        prefs.edit().putInt(KEY_LAST_SERVER_PORT, clampInt(MIN_PORT, MAX_PORT, value)).apply();
     }
 
     private static Set<String> defaultSentenceTokens() {
