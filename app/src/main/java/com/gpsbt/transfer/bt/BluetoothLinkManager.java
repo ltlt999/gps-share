@@ -39,6 +39,7 @@ public final class BluetoothLinkManager implements Link {
     private final ConnectionMode mode;
     private final BluetoothDevice target;
     private final Link.Listener listener;
+    /** 当前对端。蓝牙通道恒为单值；attach()/stop() 写，ReadThread 读，故需 volatile。 */
     private volatile Peer currentPeer;
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -119,6 +120,7 @@ public final class BluetoothLinkManager implements Link {
     public boolean isConnected() {
         return socket != null && socket.isConnected() && out != null;
     }
+
     @Override
     public void start() {
         if (mode == ConnectionMode.CLIENT) {
