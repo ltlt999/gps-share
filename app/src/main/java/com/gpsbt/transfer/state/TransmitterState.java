@@ -15,7 +15,7 @@ public final class TransmitterState {
 
     public enum Phase { IDLE, RUNNING }
 
-    /** 连接状态。枚举顺序与 `bt.BtState` 一致。 */
+    /** 连接状态。枚举顺序与 `link.Link.State` 一致。 */
     public enum Bt { IDLE, WAITING, CONNECTING, CONNECTED, FAILED, DISCONNECTED }
 
     /** 连接方式。枚举顺序与 `bt.ConnectionMode` 一致。 */

@@ -14,6 +14,8 @@ import android.os.Looper;
 import androidx.core.content.ContextCompat;
 
 import com.gpsbt.transfer.R;
+import com.gpsbt.transfer.link.Link;
+import com.gpsbt.transfer.link.Peer;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,17 +27,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/** 蓝牙 SPP（RFCOMM）连接管理：支持服务器等待连接与客户端主动连接。 */
-public final class BluetoothLinkManager {
-
-    /** 主线程回调。 */
-    public interface Listener {
-        void onState(BtState state, String message);
-
-        void onConnected(String remoteName, String remoteMac);
-
-        void onDisconnected(String message);
-    }
+/** 蓝牙 SPP（RFCOMM）通道：实现 {@link Link}，单对端。服务端/客户端模式在构造时确定。 */
+public final class BluetoothLinkManager implements Link {
 
     private static final UUID FALLBACK_UUID =
             UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
@@ -43,7 +36,10 @@ public final class BluetoothLinkManager {
     private final BluetoothAdapter adapter;
     private final String serviceName;
     private final UUID uuid;
-    private final Listener listener;
+    private final ConnectionMode mode;
+    private final BluetoothDevice target;
+    private final Link.Listener listener;
+    private volatile Peer currentPeer;
     private final Handler main = new Handler(Looper.getMainLooper());
 
     private volatile boolean stopping;
@@ -54,12 +50,16 @@ public final class BluetoothLinkManager {
     private OutputStream out;
 
     public BluetoothLinkManager(Context context, BluetoothAdapter adapter,
-                                String serviceName, UUID uuid, Listener listener) {
+                                String serviceName, UUID uuid,
+                                ConnectionMode mode, BluetoothDevice target,
+                                Link.Listener listener) {
         String fallback = context.getString(R.string.app_name);
         this.serviceName = serviceName == null || serviceName.trim().isEmpty()
                 ? fallback : serviceName;
         this.adapter = adapter;
         this.uuid = uuid == null ? FALLBACK_UUID : uuid;
+        this.mode = mode == null ? ConnectionMode.SERVER : mode;
+        this.target = target;
         this.listener = listener;
     }
 
@@ -115,19 +115,28 @@ public final class BluetoothLinkManager {
         }
     }
 
+    @Override
     public boolean isConnected() {
         return socket != null && socket.isConnected() && out != null;
+    }
+    @Override
+    public void start() {
+        if (mode == ConnectionMode.CLIENT) {
+            startClient(target);
+        } else {
+            startServer();
+        }
     }
 
     // ---------- 服务器模式 ----------
 
-    public void startServer() {
+    private void startServer() {
         if (adapter == null) {
-            postState(BtState.FAILED, "设备不支持蓝牙");
+            postState(Link.State.FAILED, "设备不支持蓝牙");
             return;
         }
         if (!adapter.isEnabled()) {
-            postState(BtState.FAILED, "蓝牙未开启，请在系统设置中开启");
+            postState(Link.State.FAILED, "蓝牙未开启，请在系统设置中开启");
             return;
         }
         stopping = false;
@@ -137,17 +146,17 @@ public final class BluetoothLinkManager {
 
     // ---------- 客户端模式 ----------
 
-    public void startClient(BluetoothDevice device) {
+    private void startClient(BluetoothDevice device) {
         if (adapter == null || device == null) {
-            postState(BtState.FAILED, "设备不支持蓝牙或目标设备无效");
+            postState(Link.State.FAILED, "设备不支持蓝牙或目标设备无效");
             return;
         }
         if (!adapter.isEnabled()) {
-            postState(BtState.FAILED, "蓝牙未开启，请在系统设置中开启");
+            postState(Link.State.FAILED, "蓝牙未开启，请在系统设置中开启");
             return;
         }
         stopping = false;
-        postState(BtState.CONNECTING, "正在连接 " + displayName(device));
+        postState(Link.State.CONNECTING, "正在连接 " + displayName(device));
         connectThread = new ConnectThread(device);
         connectThread.start();
     }
@@ -155,6 +164,7 @@ public final class BluetoothLinkManager {
     // ---------- 发送 ----------
 
     /** 未连接时抛 IOException；调用方负责据此停止服务。 */
+    @Override
     public synchronized void write(byte[] data) throws IOException {
         OutputStream stream = out;
         BluetoothSocket current = socket;
@@ -190,9 +200,11 @@ public final class BluetoothLinkManager {
 
     // ---------- 停止 ----------
 
+    @Override
     public synchronized void stop() {
         stopping = true;
         closeSocket();
+        currentPeer = null;
         if (acceptThread != null) {
             acceptThread.cancel();
             acceptThread = null;
@@ -201,7 +213,7 @@ public final class BluetoothLinkManager {
             connectThread.cancel();
             connectThread = null;
         }
-        postState(BtState.IDLE, "蓝牙链路已关闭");
+        postState(Link.State.IDLE, "蓝牙链路已关闭");
     }
 
     private synchronized void closeSocket() {
@@ -228,6 +240,7 @@ public final class BluetoothLinkManager {
     }
 
     /** 关闭当前连接（保留 server socket，accept 循环继续等待下一次连接）。 */
+    @Override
     public synchronized void resetConnection() {
         closeSocket();
     }
@@ -246,7 +259,7 @@ public final class BluetoothLinkManager {
             in = accepted.getInputStream();
         } catch (IOException e) {
             closeSocket();
-            postState(BtState.FAILED, "获取流失败：" + e.getMessage());
+            postState(Link.State.FAILED, "获取流失败：" + e.getMessage());
             return;
         }
         // 读取线程：发送端只发数据，读到 EOF/异常即代表接收端断开——
@@ -256,8 +269,10 @@ public final class BluetoothLinkManager {
         BluetoothDevice device = accepted.getRemoteDevice();
         String name = device == null ? "未知设备" : displayName(device);
         String mac = device == null ? "" : device.getAddress();
-        postState(BtState.CONNECTED, "已连接 " + name);
-        listener.onConnected(name, mac);
+        Peer peer = new Peer(name, mac, System.currentTimeMillis());
+        currentPeer = peer;
+        postState(Link.State.CONNECTED, "已连接 " + name);
+        listener.onPeerJoined(peer);
     }
 
     /** 只读线程：接收端正常不发数据，读到任何字节都忽略；EOF/异常即判定对端断开。 */
@@ -297,7 +312,7 @@ public final class BluetoothLinkManager {
                 @Override
                 public void run() {
                     if (running && !stopping) {
-                        listener.onDisconnected(message);
+                        listener.onPeerLeft(currentPeer, message);
                     }
                 }
             });
@@ -315,7 +330,7 @@ public final class BluetoothLinkManager {
         }
     }
 
-    private void postState(final BtState state, final String message) {
+    private void postState(final Link.State state, final String message) {
         main.post(new Runnable() {
             @Override
             public void run() {
@@ -334,13 +349,13 @@ public final class BluetoothLinkManager {
                 // 接收端任何时候用 SDP 查询都能命中同一通道
                 server = adapter.listenUsingInsecureRfcommWithServiceRecord(serviceName, uuid);
             } catch (SecurityException e) {
-                postState(BtState.FAILED, "缺少蓝牙连接权限");
+                postState(Link.State.FAILED, "缺少蓝牙连接权限");
                 return;
             } catch (IOException e) {
-                postState(BtState.FAILED, "创建蓝牙服务失败：" + e.getMessage());
+                postState(Link.State.FAILED, "创建蓝牙服务失败：" + e.getMessage());
                 return;
             }
-            postState(BtState.WAITING, "蓝牙服务已开启，等待设备连接");
+            postState(Link.State.WAITING, "蓝牙服务已开启，等待设备连接");
             // accept 循环：连接断开后回到 accept 等待下一次连接，
             // 不再关闭重建 server socket（那是通道漂移与 SDP 缓存错位的根源）
             while (!stopping) {
@@ -349,7 +364,7 @@ public final class BluetoothLinkManager {
                     accepted = server.accept();
                 } catch (IOException e) {
                     if (!stopping) {
-                        postState(BtState.FAILED, "监听中断：" + e.getMessage());
+                        postState(Link.State.FAILED, "监听中断：" + e.getMessage());
                     }
                     break;
                 }
@@ -403,10 +418,10 @@ public final class BluetoothLinkManager {
                 target = device.createInsecureRfcommSocketToServiceRecord(uuid);
                 target.connect();
             } catch (SecurityException e) {
-                postState(BtState.FAILED, "缺少蓝牙连接权限");
+                postState(Link.State.FAILED, "缺少蓝牙连接权限");
                 return;
             } catch (IOException e) {
-                postState(BtState.FAILED, "连接失败：" + e.getMessage());
+                postState(Link.State.FAILED, "连接失败：" + e.getMessage());
                 closeQuietly();
                 return;
             }

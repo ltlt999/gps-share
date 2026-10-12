@@ -24,10 +24,11 @@ import com.gpsbt.transfer.MainActivity;
 import com.gpsbt.transfer.boot.BootNotifier;
 import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
-import com.gpsbt.transfer.bt.BtState;
 import com.gpsbt.transfer.bt.ConnectionMode;
 import com.gpsbt.transfer.engine.LocationProvider;
 import com.gpsbt.transfer.engine.TransmitEngine;
+import com.gpsbt.transfer.link.Link;
+import com.gpsbt.transfer.link.Peer;
 import com.gpsbt.transfer.nmea.NmeaGenerator;
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
@@ -82,7 +83,7 @@ public class GpsOutputService extends Service {
     private Prefs prefs;
     private LocationProvider locationProvider;
     private TransmitEngine engine;
-    private BluetoothLinkManager link;
+    private Link link;
     private TransmitStats stats;
     private TransmitterState state;
     private volatile ConnectionMode mode = ConnectionMode.SERVER;
@@ -365,24 +366,24 @@ public class GpsOutputService extends Service {
 
     /** 只建立（或重建）蓝牙链路，不重置定位与调度——断线重连时复用。 */
     private boolean connectLink(BluetoothAdapter adapter) {
+        BluetoothDevice device = null;
+        if (mode == ConnectionMode.CLIENT) {
+            try {
+                device = adapter.getRemoteDevice(deviceMac);
+            } catch (IllegalArgumentException e) {
+                state.setStatusText("目标设备地址无效：" + deviceMac);
+                LogBus.get().log(LogBus.Level.ERROR, "目标设备地址无效：" + deviceMac);
+                return false;
+            }
+            state.setPendingDevice(new TransmitterState.Device(
+                    BluetoothLinkManager.displayName(device), deviceMac));
+        }
         link = new BluetoothLinkManager(this, adapter, prefs.getServiceName(),
-                UUID.fromString(prefs.getUuid()), bluetoothListener);
+                UUID.fromString(prefs.getUuid()), mode, device, linkListener);
         if (mode == ConnectionMode.SERVER) {
             state.setStatusText("蓝牙服务启动中…");
-            link.startServer();
-            return true;
         }
-        BluetoothDevice device;
-        try {
-            device = adapter.getRemoteDevice(deviceMac);
-        } catch (IllegalArgumentException e) {
-            state.setStatusText("目标设备地址无效：" + deviceMac);
-            LogBus.get().log(LogBus.Level.ERROR, "目标设备地址无效：" + deviceMac);
-            return false;
-        }
-        state.setPendingDevice(new TransmitterState.Device(
-                BluetoothLinkManager.displayName(device), deviceMac));
-        link.startClient(device);
+        link.start();
         return true;
     }
 
@@ -468,7 +469,7 @@ public class GpsOutputService extends Service {
             return;
         }
         final TransmitEngine current = engine;
-        final BluetoothLinkManager currentLink = link;
+        final Link currentLink = link;
         if (current == null || currentLink == null || !currentLink.isConnected()) {
             // 每 30 秒提示一次：失败窗口里能看到「发送端没有客户端」，便于定位
             if (now - linkNotReadyLoggedAt > 30000L) {
@@ -567,52 +568,52 @@ public class GpsOutputService extends Service {
         }
     };
 
-    private final BluetoothLinkManager.Listener bluetoothListener =
-            new BluetoothLinkManager.Listener() {
-                @Override
-                public void onState(BtState btState, String message) {
-                    state.setBt(mapBt(btState));
-                    state.setStatusText(message);
-                    LogBus.get().log(mapLevel(btState), "蓝牙：" + message);
-                    if (btState == BtState.FAILED) {
-                        // 监听建立失败属于致命错误（权限/蓝牙不可用），停止服务
-                        stopSelfSafely();
-                        return;
-                    }
-                    refreshNotification();
-                }
+    private final Link.Listener linkListener = new Link.Listener() {
+        @Override
+        public void onState(Link.State linkState, String message) {
+            state.setBt(mapBt(linkState));
+            state.setStatusText(message);
+            LogBus.get().log(mapLevel(linkState), "蓝牙：" + message);
+            if (linkState == Link.State.FAILED) {
+                // 监听建立失败属于致命错误（权限/蓝牙不可用），停止服务
+                stopSelfSafely();
+                return;
+            }
+            refreshNotification();
+        }
 
-                @Override
-                public void onConnected(String remoteName, String remoteMac) {
-                    state.setConnectedDevice(new TransmitterState.Device(remoteName, remoteMac));
-                    state.setPendingDevice(null);
-                    stats.startedAt = System.currentTimeMillis();
-                    LogBus.get().log(LogBus.Level.INFO, "已连接 " + remoteName + "（" + remoteMac + "）");
-                    refreshNotification();
-                }
+        @Override
+        public void onPeerJoined(Peer peer) {
+            state.setConnectedDevice(new TransmitterState.Device(peer.name, peer.address));
+            state.setPendingDevice(null);
+            stats.startedAt = System.currentTimeMillis();
+            LogBus.get().log(LogBus.Level.INFO,
+                    "已连接 " + peer.name + "（" + peer.address + "）");
+            refreshNotification();
+        }
 
-                @Override
-                public void onDisconnected(String message) {
-                    LogBus.get().log(LogBus.Level.WARN, "蓝牙已断开：" + message);
-                    if (mode == ConnectionMode.SERVER) {
-                        // 服务器模式：清理死连接，accept 循环继续等待下一次连接
-                        BluetoothLinkManager currentLink = link;
-                        if (currentLink != null) {
-                            currentLink.resetConnection();
-                        }
-                        state.setConnectedDevice(null);
-                        state.setBt(TransmitterState.Bt.WAITING);
-                        state.setStatusText("蓝牙已断开，等待接收端重新连接");
-                        refreshNotification();
-                    } else {
-                        state.setConnectedDevice(null);
-                        state.setStatusText("蓝牙连接已断开，尝试重新连接");
-                        scheduleRelink();
-                    }
+        @Override
+        public void onPeerLeft(Peer peer, String reason) {
+            LogBus.get().log(LogBus.Level.WARN, "蓝牙已断开：" + reason);
+            if (mode == ConnectionMode.SERVER) {
+                // 服务器模式：清理死连接，accept 循环继续等待下一次连接
+                Link currentLink = link;
+                if (currentLink != null) {
+                    currentLink.resetConnection();
                 }
-            };
+                state.setConnectedDevice(null);
+                state.setBt(TransmitterState.Bt.WAITING);
+                state.setStatusText("蓝牙已断开，等待接收端重新连接");
+                refreshNotification();
+            } else {
+                state.setConnectedDevice(null);
+                state.setStatusText("蓝牙连接已断开，尝试重新连接");
+                scheduleRelink();
+            }
+        }
+    };
 
-    private static TransmitterState.Bt mapBt(BtState value) {
+    private static TransmitterState.Bt mapBt(Link.State value) {
         switch (value) {
             case WAITING:
                 return TransmitterState.Bt.WAITING;
@@ -630,7 +631,7 @@ public class GpsOutputService extends Service {
         }
     }
 
-    private static LogBus.Level mapLevel(BtState value) {
+    private static LogBus.Level mapLevel(Link.State value) {
         switch (value) {
             case FAILED:
                 return LogBus.Level.ERROR;
