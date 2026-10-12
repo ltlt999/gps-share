@@ -2446,9 +2446,37 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew clean :app:tes
 
 ## 验收记录
 
-> 执行完成后填写：日期、发送端设备、接收端设备、Android 版本、逐项结果、发现的问题。
+**日期**：2026-10-13
+**分支**：`p3-receiver`（基线 `p2-wifi-sender`）
 
-（待填）
+### 自动化部分（已完成）
+
+| 项 | 结果 |
+|---|---|
+| `clean` 后全量构建 | `BUILD SUCCESSFUL` |
+| 单元测试 | **93 用例，0 失败，0 错误**（基线 77 → 93） |
+| debug / release APK | 均产出；release 已签名 |
+| 权限 | `INTERNET`、`ACCESS_FINE_LOCATION`、`FOREGROUND_SERVICE_DATA_SYNC` 等均在 release APK 中确认 |
+
+### 执行过程中的偏离与事故
+
+1. **Task 6 的子代理在第 5 步中途遇到 API 503 被中断**。Step 1–4 的产物（字符串、`item_server.xml`、`ServerAdapter.java`、`fragment_home.xml`）保留，Step 5 的 `HomeFragment` 改动由控制器接着完成。
+2. **审查子代理同样遇到 API 503**，改由控制器人工审查 P3 全阶段。发现并修掉两处真实缺陷：
+   - `ServerTable` 的 `upsert`（UDP 接收线程）与 `snapshot`（轮询线程）同时操作同一个 `LinkedHashMap`，会抛 `ConcurrentModificationException` → 四个公开方法加 `synchronized`，并补一条结构断言锁住契约
+   - `NmeaClient.postConnection` 缺少 `running` 守卫，`stop()` 关 socket 会触发多余回调、把已 reset 的状态写脏 → 补守卫，与 `onLocation` 一致
+3. 计划自查阶段修正四处：往返测试需喂两轮（卫星语句在位置语句之后）、发现回调改比对键列表而非数量、接收端通知自己数接收条数、接收启动走定位授权入口。
+
+### 真机部分（待办）
+
+**需要两台设备**（发送端手机 + 无 GPS 的平板/车机），以下尚未执行：
+
+- 接收端自动发现并连上发送端
+- **导航 App 定位被接管**（关键判据）
+- 未授权模拟位置时不闪退、给出指引
+- 断线 5 秒重连、记住上次服务器
+- 共享角色未被破坏
+
+> **动手前请先确认目标设备能进开发者选项并把本应用设为「模拟位置信息应用」**——进不去的话接收端对那台设备不成立。
 
 ---
 

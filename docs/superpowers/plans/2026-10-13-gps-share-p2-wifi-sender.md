@@ -2769,9 +2769,36 @@ nc -ul 10111
 
 ## 验收记录
 
-> 执行完成后填写：日期、真机型号、Android 版本、逐项结果、发现的问题。
+**日期**：2026-10-13
+**分支**：`p2-wifi-sender`（基线 `p1-link-abstraction`）
 
-（待填）
+### 自动化部分（已完成）
+
+| 项 | 结果 |
+|---|---|
+| `clean` 后全量构建 | `BUILD SUCCESSFUL` |
+| 单元测试 | **77 用例，0 失败，0 错误**（基线 55 → 77） |
+| debug / release APK | 均产出；release 已签名 |
+| 包名 / 版本 / 应用名 | `com.gpsshare` / `1.0.0` / `GPS共享` |
+| `INTERNET` 权限 | 已在 release APK 中确认 |
+| 代码审查 | Task 1/2 逐条核对；Task 3–8 各自独立审查；共修掉 5 处真实缺陷 |
+
+### 审查中发现并修掉的缺陷
+
+1. `PeerRegistry.broadcast` 只捕获 `IOException`，非受检异常会逃逸、破坏「广播永不抛」契约 → 改捕获 `Exception`，关闭统一收进 `closeQuietly`
+2. `NetLinkManager.stop()` 关闭期间会发出多余 `onPeerLeft` → 回调加 `stopping` 守卫
+3. `NetLinkManager.resetConnection()` 不发回调，状态层残留幽灵对端 → 改为逐个回调
+4. `NetLinkManager` 读线程早于 `onPeerJoined` 入队，秒断时回调顺序颠倒 → 改为先入册、先投递、最后起读线程
+5. `TransmitterState.resetForStop()` 硬重置传输方式，停止后开关弹回蓝牙**并把用户设置一并改写** → 从状态层移除 `Transport`，界面只读 `Prefs`
+
+### 真机部分（待办）
+
+**设备未连接**（`adb devices` 为空），以下尚未执行：
+
+- PC 上用 TCP 工具连 `热点地址:10110` 收 NMEA
+- 两台接收端同时收，界面显示「2 台」
+- PC 上 `nc -ul 10111` 验证发现信标
+- 蓝牙方式回归（P1 的 9 项检查表）
 
 ---
 
