@@ -65,19 +65,31 @@ public final class PeerRegistry {
         for (Client client : clients) {
             try {
                 client.write(data);
-            } catch (IOException e) {
-                // 这个对端死了，摘掉即可——不是整条链路的故障
+            } catch (Exception e) {
+                // 这个对端死了，摘掉即可——不是整条链路的故障。
+                // 捕获 Exception 而非 IOException：Socket 实现也可能抛
+                // RuntimeException（如关闭竞态下的 IllegalStateException），
+                // 而「广播永不抛」是本类的硬契约，漏掉非受检异常就形同虚设。
                 clients.remove(client);
-                client.close();
+                closeQuietly(client);
             }
         }
     }
 
-    /** 关闭并清空全部客户端。 */
+    /** 关闭并清空全部客户端。单个客户端关闭失败不影响其余。 */
     public void closeAll() {
         for (Client client : clients) {
-            client.close();
+            closeQuietly(client);
         }
         clients.clear();
+    }
+
+    /** 关闭单个客户端；任何异常都不外泄——一个坏客户端不该拖累其余。 */
+    private static void closeQuietly(Client client) {
+        try {
+            client.close();
+        } catch (Exception ignored) {
+            // 关闭失败无从补救，忽略
+        }
     }
 }
