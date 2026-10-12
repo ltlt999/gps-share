@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.gpsbt.transfer.bt.ConnectionMode;
+import com.gpsbt.transfer.link.Transport;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
 
 import java.util.EnumSet;
@@ -23,6 +24,12 @@ public final class Prefs {
     public static final float DEFAULT_HDOP = 1.0f;
     /** 开机自启默认关闭：用户不开启就不自动运行。 */
     public static final boolean DEFAULT_AUTO_START = false;
+    /** WiFi 通道默认端口：NMEA over TCP 的行业惯例端口。 */
+    public static final int DEFAULT_WIFI_PORT = 10110;
+    /** 服务发现默认端口。 */
+    public static final int DEFAULT_DISCOVERY_PORT = 10111;
+    public static final int MIN_PORT = 1024;
+    public static final int MAX_PORT = 65535;
 
     private static final String NAME = "gps_bt_prefs";
     private static final String KEY_RATE = "rate_hz";
@@ -35,6 +42,10 @@ public final class Prefs {
     private static final String KEY_MODE = "mode";
     private static final String KEY_LAST_MAC = "last_device_mac";
     private static final String KEY_AUTO_START = "auto_start_boot";
+    private static final String KEY_TRANSPORT = "transport";
+    private static final String KEY_WIFI_PORT = "wifi_port";
+    private static final String KEY_DISCOVERY_ENABLED = "discovery_enabled";
+    private static final String KEY_DISCOVERY_PORT = "discovery_port";
 
     private static volatile Prefs instance;
     private final SharedPreferences prefs;
@@ -165,6 +176,46 @@ public final class Prefs {
 
     public void setAutoStartOnBoot(boolean value) {
         prefs.edit().putBoolean(KEY_AUTO_START, value).apply();
+    }
+
+    public Transport getTransport() {
+        String name = prefs.getString(KEY_TRANSPORT, Transport.BLUETOOTH.name());
+        try {
+            return Transport.valueOf(name);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return Transport.BLUETOOTH;
+        }
+    }
+
+    public void setTransport(Transport value) {
+        prefs.edit().putString(KEY_TRANSPORT,
+                (value == null ? Transport.BLUETOOTH : value).name()).apply();
+    }
+
+    public int getWifiPort() {
+        return clampInt(MIN_PORT, MAX_PORT,
+                prefs.getInt(KEY_WIFI_PORT, DEFAULT_WIFI_PORT));
+    }
+
+    public void setWifiPort(int value) {
+        prefs.edit().putInt(KEY_WIFI_PORT, clampInt(MIN_PORT, MAX_PORT, value)).apply();
+    }
+
+    public boolean isDiscoveryEnabled() {
+        return prefs.getBoolean(KEY_DISCOVERY_ENABLED, true);
+    }
+
+    public void setDiscoveryEnabled(boolean value) {
+        prefs.edit().putBoolean(KEY_DISCOVERY_ENABLED, value).apply();
+    }
+
+    public int getDiscoveryPort() {
+        return clampInt(MIN_PORT, MAX_PORT,
+                prefs.getInt(KEY_DISCOVERY_PORT, DEFAULT_DISCOVERY_PORT));
+    }
+
+    public void setDiscoveryPort(int value) {
+        prefs.edit().putInt(KEY_DISCOVERY_PORT, clampInt(MIN_PORT, MAX_PORT, value)).apply();
     }
 
     private static Set<String> defaultSentenceTokens() {
