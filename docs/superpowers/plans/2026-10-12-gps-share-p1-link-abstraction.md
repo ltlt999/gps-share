@@ -753,3 +753,10 @@ git commit -m "docs: P1 蓝牙回归验收记录"
 **类型一致性**：`Link.State`（六个枚举值与 `TransmitterState.Bt` 顺序一致）、`Link.Listener`（`onState` / `onPeerJoined` / `onPeerLeft`）、`Peer(name, address, connectedAt)`、`Link` 的五个方法（`start` / `stop` / `write` / `isConnected` / `resetConnection`）在 Task 2 定义一次，Task 3 全部按此实现与调用，无第二套命名。
 
 **刻意留到 P2 的**：`TransmitterState` 的 `Device` → 多对端列表（P2 需要展示多个接收端时才改）；`bt/ConnectionMode` 的归属（P2 引入传输方式维度后再定）。
+
+**P1 执行中记下的、必须在 P2 兑现的接口约束**（来自 Task 2 的代码质量审查）：
+
+1. **`write()` 抛 `IOException` 只能表示「整条通道不可用」，不能表示「某一个对端死了」。** 蓝牙是单对端，两者等价；但 WiFi 是多对端，某个 TCP 客户端写失败必须**静默摘除该客户端、继续发给其余对端**，绝不能抛出去——否则 `GpsOutputService` 的 catch 分支会误判为链路整体故障而停掉服务。
+2. **`stop()` 必须幂等，且重复调用不得再次触发回调。** 现有蓝牙实现的 `stop()` 每次都会 post 一次 `IDLE` 状态；重复调用会让监听方收到多余的「链路已关闭」事件。
+3. **多对端场景下回调与 `write()` 可能来自不同线程**，实现方需自行保证可见性。
+4. **线程约定应作为硬性要求写进 P2 计划**：`Listener` 回调统一在主线程投递（蓝牙实现已如此），否则 `GpsOutputService` 里每个回调点都要重新审一遍线程安全。
