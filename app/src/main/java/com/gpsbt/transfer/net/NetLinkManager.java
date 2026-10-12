@@ -13,6 +13,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.List;
 
 /**
  * WiFi / TCP 服务端通道：实现 {@link Link}，多对端。
@@ -34,7 +35,8 @@ public final class NetLinkManager implements Link {
 
     private volatile boolean stopping;
     private volatile boolean started;
-    private ServerSocket server;
+    /** accept 线程写、stop() 读，跨线程故 volatile。 */
+    private volatile ServerSocket server;
     private Thread acceptThread;
 
     public NetLinkManager(int port, Link.Listener listener) {
@@ -85,15 +87,37 @@ public final class NetLinkManager implements Link {
         return !registry.isEmpty();
     }
 
-    /** 断开所有接收端，继续监听等待重连。 */
+    /** 断开所有接收端，继续监听等待重连。每个被断开的对端都会回调 onPeerLeft。 */
     @Override
     public void resetConnection() {
+        List<PeerRegistry.Client> dropped = registry.snapshot();
         registry.closeAll();
+        // 必须逐个回调：否则状态层的对端列表会留下永远不会消失的幽灵条目
+        for (PeerRegistry.Client client : dropped) {
+            postPeerLeft(client.address());
+        }
     }
 
     /** 当前监听端口。 */
     public int port() {
         return port;
+    }
+
+    /**
+     * 投递一次 onPeerLeft。停止过程中不再回调——`stop()` 已经清了状态，
+     * 此时再报「接收端断开」会污染停止后的界面。
+     */
+    private void postPeerLeft(final String address) {
+        final Peer peer = new Peer(address, address, 0L);
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                if (stopping) {
+                    return;
+                }
+                listener.onPeerLeft(peer, "接收端已断开");
+            }
+        });
     }
 
     // ---------- accept ----------
@@ -137,7 +161,12 @@ public final class NetLinkManager implements Link {
                 ? "未知地址" : socket.getInetAddress().getHostAddress();
         String label = address + ":" + socket.getPort();
         TcpClient client = new TcpClient(socket, label);
-        if (!client.open()) {
+        if (!client.openStreams()) {
+            return;
+        }
+        // 取流期间可能已经 stop()，再确认一次
+        if (stopping) {
+            closeQuietly(socket);
             return;
         }
         registry.add(client);
@@ -153,6 +182,9 @@ public final class NetLinkManager implements Link {
             }
         });
         LogBus.get().log(LogBus.Level.INFO, "WiFi 接收端接入：" + label);
+        // 读线程最后启动：保证 onPeerJoined 先入主线程队列，
+        // 否则对端秒断时会出现「先报断开、后报接入」的颠倒回调
+        client.startReader();
     }
 
     private void closeServer() {
@@ -213,7 +245,8 @@ public final class NetLinkManager implements Link {
             return address;
         }
 
-        boolean open() {
+        /** 只取流，不起读线程——由 attach() 决定何时启动，以固定回调顺序。 */
+        boolean openStreams() {
             try {
                 out = socket.getOutputStream();
                 in = socket.getInputStream();
@@ -222,6 +255,10 @@ public final class NetLinkManager implements Link {
                 close();
                 return false;
             }
+            return true;
+        }
+
+        void startReader() {
             reader = new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -229,7 +266,6 @@ public final class NetLinkManager implements Link {
                 }
             }, "net-read-" + address);
             reader.start();
-            return true;
         }
 
         @Override
@@ -265,20 +301,15 @@ public final class NetLinkManager implements Link {
                 }
                 // 接收端不发数据，收到即忽略
             }
-            if (!alive) {
+            if (!alive || stopping) {
+                // 已经关过了（close()/closeAll），或服务正在停止——都不该再回调
                 return;
             }
             alive = false;
             registry.remove(this);
             closeQuietly(socket);
             LogBus.get().log(LogBus.Level.WARN, "WiFi 接收端断开：" + address);
-            final Peer peer = new Peer(address, address, 0L);
-            main.post(new Runnable() {
-                @Override
-                public void run() {
-                    listener.onPeerLeft(peer, "接收端已断开");
-                }
-            });
+            postPeerLeft(address);
         }
     }
 }
