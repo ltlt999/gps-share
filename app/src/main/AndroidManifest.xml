@@ -34,6 +34,9 @@
         android:name="android.permission.FOREGROUND_SERVICE_LOCATION"
         android:minSdkVersion="34" />
     <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        android:minSdkVersion="34" />
+    <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         android:minSdkVersion="33" />
 
@@ -68,6 +71,12 @@
             android:name=".service.GpsOutputService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- 接收端：连发送端并把定位注入系统。前台服务类型 dataSync（不读本机定位）。 -->
+        <service
+            android:name=".service.ReceiveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- 开机自启：不启用 direct boot，解锁后才接收广播；是否自动传输由设置开关决定。
              额外监听 QUICKBOOT_POWERON，部分车机与"快速启动"设备投递的是这个 action。 -->

@@ -151,4 +151,12 @@
     <string name="notif_action_start">开始传输</string>
     <string name="notif_restricted_title">需要手动开始传输</string>
     <string name="notif_restricted_body">Android 12 及以上系统不允许开机自启的服务在后台读取定位，已暂停。点「开始传输」即可立即恢复（此时为前台操作，不受限制）。</string>
+
+    <!-- 接收端通知 -->
+    <string name="channel_receive_name">GPS共享接收</string>
+    <string name="channel_receive_desc">显示接收 GPS 数据的运行状态</string>
+    <string name="receive_notif_receiving">正在接收 GPS 数据</string>
+    <string name="receive_notif_waiting">等待发送端…</string>
+    <string name="receive_notif_stats">已接收 %1$d 条 / %2$s</string>
+    <string name="receive_mock_denied">未获得模拟位置授权，定位无法注入</string>
 </resources>
