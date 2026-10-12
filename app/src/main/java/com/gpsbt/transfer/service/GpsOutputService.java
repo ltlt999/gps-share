@@ -29,6 +29,9 @@ import com.gpsbt.transfer.engine.LocationProvider;
 import com.gpsbt.transfer.engine.TransmitEngine;
 import com.gpsbt.transfer.link.Link;
 import com.gpsbt.transfer.link.Peer;
+import com.gpsbt.transfer.link.Transport;
+import com.gpsbt.transfer.net.DiscoveryBroadcaster;
+import com.gpsbt.transfer.net.NetLinkManager;
 import com.gpsbt.transfer.nmea.NmeaGenerator;
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
@@ -84,6 +87,7 @@ public class GpsOutputService extends Service {
     private LocationProvider locationProvider;
     private TransmitEngine engine;
     private Link link;
+    private DiscoveryBroadcaster discovery;
     private TransmitStats stats;
     private TransmitterState state;
     private volatile ConnectionMode mode = ConnectionMode.SERVER;
@@ -142,6 +146,11 @@ public class GpsOutputService extends Service {
         if (!LocationProvider.hasPermission(context)) {
             return context.getString(R.string.boot_reason_location);
         }
+        Prefs prefs = Prefs.get(context);
+        // WiFi 通道不依赖蓝牙硬件与配对，跳过蓝牙相关的前置检查
+        if (prefs.getTransport() != Transport.BLUETOOTH) {
+            return null;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                 && ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -150,7 +159,6 @@ public class GpsOutputService extends Service {
         if (BluetoothAdapter.getDefaultAdapter() == null) {
             return context.getString(R.string.boot_reason_no_bluetooth);
         }
-        Prefs prefs = Prefs.get(context);
         if (prefs.getMode() == ConnectionMode.CLIENT) {
             String mac = prefs.getLastDeviceMac();
             if (mac == null || mac.isEmpty()) {
@@ -248,6 +256,10 @@ public class GpsOutputService extends Service {
             failStart(getString(R.string.boot_reason_location));
             return false;
         }
+        if (prefs.getTransport() == Transport.WIFI) {
+            return startTransmission(null);
+        }
+
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null) {
             failStart(getString(R.string.boot_reason_no_bluetooth));
@@ -313,6 +325,7 @@ public class GpsOutputService extends Service {
     }
 
     private boolean startTransmission(BluetoothAdapter adapter) {
+        boolean wifi = prefs.getTransport() == Transport.WIFI;
         // 重复的启动请求（开机自启 + 界面兜底、连点开始等）必须先彻底清理旧流水线：
         // 否则旧 link 的 server socket 仍在监听并会"抢走"接收端的连接，
         // 而真正在发送的新流水线手里没有连接——两端都显示已连接，却一个字节都发不出去
@@ -321,7 +334,11 @@ public class GpsOutputService extends Service {
         state.setPhase(TransmitterState.Phase.RUNNING);
         state.setMode(mode);
         state.setConfig(prefs.getServiceName(), prefs.getUuid(), prefs.getRateHz());
-        state.setStatusText(mode == ConnectionMode.SERVER ? "蓝牙服务启动中…" : "正在连接设备…");
+        state.setStatusText(wifi
+                ? "WiFi 服务启动中…"
+                : (mode == ConnectionMode.SERVER ? "蓝牙服务启动中…" : "正在连接设备…"));
+        state.setTransport(wifi ? TransmitterState.Transport.WIFI
+                : TransmitterState.Transport.BLUETOOTH);
 
         Set<NmeaSentenceType> configured = prefs.getSentences();
         final Set<NmeaSentenceType> enabled =
@@ -353,6 +370,7 @@ public class GpsOutputService extends Service {
     /** 清理可能存在的旧流水线（链路、定位、调度、重连任务）。可重复调用。 */
     private synchronized void stopExistingPipeline() {
         stopRelink();
+        stopDiscovery();
         if (link != null) {
             link.stop();
             link = null;
@@ -364,10 +382,20 @@ public class GpsOutputService extends Service {
         stopScheduler();
     }
 
-    /** 只建立（或重建）蓝牙链路，不重置定位与调度——断线重连时复用。 */
+    /** 只建立（或重建）链路，不重置定位与调度——断线重连时复用。 */
     private boolean connectLink(BluetoothAdapter adapter) {
+        if (prefs.getTransport() == Transport.WIFI) {
+            link = new NetLinkManager(prefs.getWifiPort(), linkListener);
+            link.start();
+            startDiscovery();
+            return true;
+        }
         BluetoothDevice device = null;
         if (mode == ConnectionMode.CLIENT) {
+            if (adapter == null) {
+                state.setStatusText("蓝牙不可用");
+                return false;
+            }
             try {
                 device = adapter.getRemoteDevice(deviceMac);
             } catch (IllegalArgumentException e) {
@@ -385,6 +413,23 @@ public class GpsOutputService extends Service {
         }
         link.start();
         return true;
+    }
+
+    /** 开启服务发现广播；设置里关掉时不发。 */
+    private void startDiscovery() {
+        if (!prefs.isDiscoveryEnabled()) {
+            return;
+        }
+        discovery = new DiscoveryBroadcaster(prefs.getServiceName(),
+                prefs.getWifiPort(), prefs.getDiscoveryPort());
+        discovery.start();
+    }
+
+    private void stopDiscovery() {
+        if (discovery != null) {
+            discovery.stop();
+            discovery = null;
+        }
     }
 
     /**
@@ -410,6 +455,12 @@ public class GpsOutputService extends Service {
                 if (link != null) {
                     link.stop();
                     link = null;
+                }
+                if (prefs.getTransport() == Transport.WIFI) {
+                    if (!connectLink(null)) {
+                        stopSelfSafely();
+                    }
+                    return;
                 }
                 BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
                 if (adapter == null || !adapter.isEnabled()) {
@@ -474,7 +525,8 @@ public class GpsOutputService extends Service {
             // 每 30 秒提示一次：失败窗口里能看到「发送端没有客户端」，便于定位
             if (now - linkNotReadyLoggedAt > 30000L) {
                 linkNotReadyLoggedAt = now;
-                LogBus.get().log(LogBus.Level.WARN, "蓝牙未就绪，暂停发送（等待接收端连接）");
+                LogBus.get().log(LogBus.Level.WARN,
+                        linkLabel() + "未就绪，暂停发送（等待接收端连接）");
             }
             return;
         }
@@ -573,7 +625,7 @@ public class GpsOutputService extends Service {
         public void onState(Link.State linkState, String message) {
             state.setBt(mapBt(linkState));
             state.setStatusText(message);
-            LogBus.get().log(mapLevel(linkState), "蓝牙：" + message);
+            LogBus.get().log(mapLevel(linkState), linkLabel() + "：" + message);
             if (linkState == Link.State.FAILED) {
                 // 监听建立失败属于致命错误（权限/蓝牙不可用），停止服务
                 stopSelfSafely();
@@ -588,25 +640,28 @@ public class GpsOutputService extends Service {
             state.setPendingDevice(null);
             stats.startedAt = System.currentTimeMillis();
             LogBus.get().log(LogBus.Level.INFO,
-                    "已连接 " + peer.name + "（" + peer.address + "）");
+                    linkLabel() + "已连接 " + peer.name + "（" + peer.address + "）");
             refreshNotification();
         }
 
         @Override
         public void onPeerLeft(Peer peer, String reason) {
-            LogBus.get().log(LogBus.Level.WARN, "蓝牙已断开：" + reason);
-            if (mode == ConnectionMode.SERVER) {
-                // 服务器模式：清理死连接，accept 循环继续等待下一次连接
+            LogBus.get().log(LogBus.Level.WARN, linkLabel() + "已断开：" + reason);
+            state.removePeer(peer);
+            if (mode == ConnectionMode.SERVER && prefs.getTransport() == Transport.BLUETOOTH) {
+                // 蓝牙单对端：清理死连接，accept 循环继续等待下一次连接
                 Link currentLink = link;
                 if (currentLink != null) {
                     currentLink.resetConnection();
                 }
-                state.removePeer(peer);
                 state.setBt(TransmitterState.Bt.WAITING);
                 state.setStatusText("蓝牙已断开，等待接收端重新连接");
                 refreshNotification();
+            } else if (prefs.getTransport() == Transport.WIFI) {
+                // WiFi 多对端：只摘掉走掉的那一个，其余接收端不受影响
+                state.setStatusText(peerCountText());
+                refreshNotification();
             } else {
-                state.removePeer(peer);
                 state.setStatusText("蓝牙连接已断开，尝试重新连接");
                 scheduleRelink();
             }
@@ -640,6 +695,19 @@ public class GpsOutputService extends Service {
             default:
                 return LogBus.Level.INFO;
         }
+    }
+
+    /** 日志前缀：当前传输方式的短名。 */
+    private String linkLabel() {
+        return prefs.getTransport() == Transport.WIFI ? "WiFi" : "蓝牙";
+    }
+
+    /** WiFi 下的状态文案：还在收就报在线台数，全走光了就报等待。 */
+    private String peerCountText() {
+        int count = state.peers().size();
+        return count == 0
+                ? "接收端已断开，继续等待连接"
+                : "接收端 " + count + " 台在线";
     }
 
     // ---------- 通知 ----------
@@ -766,6 +834,7 @@ public class GpsOutputService extends Service {
     private synchronized void stopSelfSafely() {
         running = false;
         stopRelink();
+        stopDiscovery();
         if (locationProvider != null) {
             locationProvider.stop();
             locationProvider = null;
