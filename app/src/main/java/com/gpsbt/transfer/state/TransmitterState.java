@@ -4,6 +4,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import com.gpsbt.transfer.bt.ConnectionMode;
+import com.gpsbt.transfer.link.Peer;
 import com.gpsbt.transfer.ui.view.SatelliteRadarView;
 
 import java.util.ArrayList;
@@ -20,6 +21,9 @@ public final class TransmitterState {
 
     /** 连接方式。枚举顺序与 `bt.ConnectionMode` 一致。 */
     public enum Mode { SERVER, CLIENT }
+
+    /** 传输方式。顺序与 `link.Transport` 一致。 */
+    public enum Transport { BLUETOOTH, WIFI }
 
     public static final class Device {
         public final String name;
@@ -108,7 +112,7 @@ public final class TransmitterState {
     private volatile Phase phase = Phase.IDLE;
     private volatile Bt bt = Bt.IDLE;
     private volatile Mode mode = Mode.SERVER;
-    private volatile Device connectedDevice;
+    private volatile List<Peer> peers = Collections.emptyList();
     private volatile Device pendingDevice;
     private volatile String serviceName = "";
     private volatile String uuid = "";
@@ -117,6 +121,7 @@ public final class TransmitterState {
     private volatile Fix fix;
     private volatile TransmitStats stats = new TransmitStats();
     private volatile List<SatelliteRadarView.Sat> satellites = Collections.emptyList();
+    private volatile Transport transport = Transport.BLUETOOTH;
 
     private TransmitterState() {
     }
@@ -170,8 +175,25 @@ public final class TransmitterState {
         return mode;
     }
 
+    public List<Peer> peers() {
+        return peers;
+    }
+
+    /**
+     * 派生值：第一个对端。蓝牙恒为单对端，因此等价于「已连接的设备」。
+     * 多对端场景请改用 {@link #peers()}。
+     */
     public Device connectedDevice() {
-        return connectedDevice;
+        List<Peer> snapshot = peers;
+        if (snapshot.isEmpty()) {
+            return null;
+        }
+        Peer first = snapshot.get(0);
+        return new Device(first.name, first.address);
+    }
+
+    public Transport transport() {
+        return transport;
     }
 
     public Device pendingDevice() {
@@ -225,8 +247,38 @@ public final class TransmitterState {
         setMode(value == ConnectionMode.CLIENT ? Mode.CLIENT : Mode.SERVER);
     }
 
-    public void setConnectedDevice(Device value) {
-        connectedDevice = value;
+    public void setPeers(List<Peer> value) {
+        peers = value == null
+                ? Collections.<Peer>emptyList()
+                : Collections.unmodifiableList(new ArrayList<>(value));
+        notifyListeners();
+    }
+
+    /** 追加一个对端；已存在（地址相同）则忽略。 */
+    public void addPeer(Peer peer) {
+        if (peer == null) {
+            return;
+        }
+        List<Peer> next = new ArrayList<>(peers);
+        if (!next.contains(peer)) {
+            next.add(peer);
+        }
+        setPeers(next);
+    }
+
+    /** 移除一个对端；不存在则不做任何通知。 */
+    public void removePeer(Peer peer) {
+        if (peer == null) {
+            return;
+        }
+        List<Peer> next = new ArrayList<>(peers);
+        if (next.remove(peer)) {
+            setPeers(next);
+        }
+    }
+
+    public void setTransport(Transport value) {
+        transport = value == null ? Transport.BLUETOOTH : value;
         notifyListeners();
     }
 
@@ -267,7 +319,8 @@ public final class TransmitterState {
     public void resetForStop() {
         phase = Phase.IDLE;
         bt = Bt.IDLE;
-        connectedDevice = null;
+        peers = Collections.emptyList();
+        transport = Transport.BLUETOOTH;
         pendingDevice = null;
         statusText = "";
         fix = null;

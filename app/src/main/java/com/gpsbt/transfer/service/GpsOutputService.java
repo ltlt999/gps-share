@@ -396,7 +396,7 @@ public class GpsOutputService extends Service {
             return;
         }
         stopRelink();
-        state.setConnectedDevice(null);
+        state.setPeers(null);
         state.setBt(TransmitterState.Bt.WAITING);
         state.setStatusText("蓝牙链路中断，5 秒后重新建立");
         LogBus.get().log(LogBus.Level.WARN, "蓝牙链路中断，5 秒后重新建立");
@@ -503,7 +503,7 @@ public class GpsOutputService extends Service {
                 if (currentLink != null) {
                     currentLink.resetConnection();
                 }
-                state.setConnectedDevice(null);
+                state.setPeers(null);
                 state.setBt(TransmitterState.Bt.WAITING);
                 state.setStatusText("蓝牙链路中断，等待接收端重新连接");
                 refreshNotification();
@@ -584,7 +584,7 @@ public class GpsOutputService extends Service {
 
         @Override
         public void onPeerJoined(Peer peer) {
-            state.setConnectedDevice(new TransmitterState.Device(peer.name, peer.address));
+            state.addPeer(peer);
             state.setPendingDevice(null);
             stats.startedAt = System.currentTimeMillis();
             LogBus.get().log(LogBus.Level.INFO,
@@ -601,12 +601,12 @@ public class GpsOutputService extends Service {
                 if (currentLink != null) {
                     currentLink.resetConnection();
                 }
-                state.setConnectedDevice(null);
+                state.removePeer(peer);
                 state.setBt(TransmitterState.Bt.WAITING);
                 state.setStatusText("蓝牙已断开，等待接收端重新连接");
                 refreshNotification();
             } else {
-                state.setConnectedDevice(null);
+                state.removePeer(peer);
                 state.setStatusText("蓝牙连接已断开，尝试重新连接");
                 scheduleRelink();
             }

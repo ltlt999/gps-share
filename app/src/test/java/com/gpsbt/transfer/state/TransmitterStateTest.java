@@ -3,9 +3,10 @@ package com.gpsbt.transfer.state;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
+import com.gpsbt.transfer.link.Peer;
 import com.gpsbt.transfer.state.TransmitterState.Bt;
-import com.gpsbt.transfer.state.TransmitterState.Device;
 import com.gpsbt.transfer.state.TransmitterState.Fix;
 import com.gpsbt.transfer.state.TransmitterState.Mode;
 import com.gpsbt.transfer.state.TransmitterState.Phase;
@@ -69,11 +70,36 @@ public class TransmitterStateTest {
     }
 
     @Test
-    public void devicesAndFixAreExposed() {
-        Device connected = new Device("车机", "AA:BB:CC:DD:EE:FF");
-        state.setConnectedDevice(connected);
+    public void peersAreAddedRemovedAndDerivedAsConnectedDevice() {
+        Peer car = new Peer("车机", "192.168.43.2:10110", 1000L);
+        Peer tablet = new Peer("平板", "192.168.43.3:10110", 2000L);
+        state.addPeer(car);
+        state.addPeer(tablet);
+
+        assertEquals(2, state.peers().size());
+        // connectedDevice 是派生值：单对端时等于那一个，多对端时取第一个
         assertEquals("车机", state.connectedDevice().name);
 
+        state.removePeer(car);
+        assertEquals(1, state.peers().size());
+        assertEquals("平板", state.connectedDevice().name);
+
+        state.removePeer(tablet);
+        assertTrue(state.peers().isEmpty());
+        assertNull(state.connectedDevice());
+    }
+
+    @Test
+    public void transportIsExposedAndResetsToBluetooth() {
+        state.setTransport(TransmitterState.Transport.WIFI);
+        assertEquals(TransmitterState.Transport.WIFI, state.transport());
+
+        state.resetForStop();
+        assertEquals(TransmitterState.Transport.BLUETOOTH, state.transport());
+    }
+
+    @Test
+    public void peersAreExposed() {
         Fix fix = new Fix();
         fix.valid = true;
         fix.latitude = 31.1;
@@ -81,6 +107,7 @@ public class TransmitterStateTest {
         assertSame(fix, state.fix());
 
         assertNull(state.pendingDevice());
+        assertTrue(state.peers().isEmpty());
     }
 
     @Test
@@ -89,7 +116,9 @@ public class TransmitterStateTest {
         assertEquals(Bt.IDLE, state.bt());
         assertEquals(Mode.SERVER, state.mode());
         assertEquals(1, state.rateHz());
+        assertTrue(state.peers().isEmpty());
         assertNull(state.connectedDevice());
+        assertEquals(TransmitterState.Transport.BLUETOOTH, state.transport());
         assertNull(state.fix());
     }
 }
