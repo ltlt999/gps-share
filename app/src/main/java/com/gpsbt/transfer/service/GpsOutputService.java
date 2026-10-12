@@ -337,8 +337,6 @@ public class GpsOutputService extends Service {
         state.setStatusText(wifi
                 ? "WiFi 服务启动中…"
                 : (mode == ConnectionMode.SERVER ? "蓝牙服务启动中…" : "正在连接设备…"));
-        state.setTransport(wifi ? TransmitterState.Transport.WIFI
-                : TransmitterState.Transport.BLUETOOTH);
 
         Set<NmeaSentenceType> configured = prefs.getSentences();
         final Set<NmeaSentenceType> enabled =

@@ -1,6 +1,6 @@
 package com.gpsbt.transfer.link;
 
-/** 发送端的传输方式。顺序必须与 `state.TransmitterState.Transport` 一致。 */
+/** 发送端的传输方式。用户偏好，持久化在 `util.Prefs`。 */
 public enum Transport {
     /** 蓝牙 SPP（单对端，服务端 / 客户端两种模式）。 */
     BLUETOOTH,

@@ -90,15 +90,6 @@ public class TransmitterStateTest {
     }
 
     @Test
-    public void transportIsExposedAndResetsToBluetooth() {
-        state.setTransport(TransmitterState.Transport.WIFI);
-        assertEquals(TransmitterState.Transport.WIFI, state.transport());
-
-        state.resetForStop();
-        assertEquals(TransmitterState.Transport.BLUETOOTH, state.transport());
-    }
-
-    @Test
     public void peersAreExposed() {
         Fix fix = new Fix();
         fix.valid = true;
@@ -118,7 +109,6 @@ public class TransmitterStateTest {
         assertEquals(1, state.rateHz());
         assertTrue(state.peers().isEmpty());
         assertNull(state.connectedDevice());
-        assertEquals(TransmitterState.Transport.BLUETOOTH, state.transport());
         assertNull(state.fix());
     }
 }

@@ -22,9 +22,6 @@ public final class TransmitterState {
     /** 连接方式。枚举顺序与 `bt.ConnectionMode` 一致。 */
     public enum Mode { SERVER, CLIENT }
 
-    /** 传输方式。顺序与 `link.Transport` 一致。 */
-    public enum Transport { BLUETOOTH, WIFI }
-
     public static final class Device {
         public final String name;
         public final String mac;
@@ -121,7 +118,6 @@ public final class TransmitterState {
     private volatile Fix fix;
     private volatile TransmitStats stats = new TransmitStats();
     private volatile List<SatelliteRadarView.Sat> satellites = Collections.emptyList();
-    private volatile Transport transport = Transport.BLUETOOTH;
 
     private TransmitterState() {
     }
@@ -190,10 +186,6 @@ public final class TransmitterState {
         }
         Peer first = snapshot.get(0);
         return new Device(first.name, first.address);
-    }
-
-    public Transport transport() {
-        return transport;
     }
 
     public Device pendingDevice() {
@@ -277,11 +269,6 @@ public final class TransmitterState {
         }
     }
 
-    public void setTransport(Transport value) {
-        transport = value == null ? Transport.BLUETOOTH : value;
-        notifyListeners();
-    }
-
     public void setPendingDevice(Device value) {
         pendingDevice = value;
         notifyListeners();
@@ -320,7 +307,6 @@ public final class TransmitterState {
         phase = Phase.IDLE;
         bt = Bt.IDLE;
         peers = Collections.emptyList();
-        transport = Transport.BLUETOOTH;
         pendingDevice = null;
         statusText = "";
         fix = null;

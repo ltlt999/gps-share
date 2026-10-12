@@ -135,9 +135,6 @@ public class HomeFragment extends Fragment
                         Transport transport = checkedId == R.id.transport_wifi
                                 ? Transport.WIFI : Transport.BLUETOOTH;
                         prefs.setTransport(transport);
-                        state.setTransport(transport == Transport.WIFI
-                                ? TransmitterState.Transport.WIFI
-                                : TransmitterState.Transport.BLUETOOTH);
                         renderPanels();
                     }
                 });
@@ -282,10 +279,14 @@ public class HomeFragment extends Fragment
         pulseButton.setState(running
                 ? PulseButtonView.State.RUNNING : PulseButtonView.State.IDLE);
 
-        Transport transport = snapshot.transport() == TransmitterState.Transport.WIFI
-                ? Transport.WIFI : Transport.BLUETOOTH;
-        transportGroup.check(transport == Transport.WIFI
-                ? R.id.transport_wifi : R.id.transport_bluetooth);
+        // 传输方式是用户偏好，事实源是 Prefs（renderPanels 也读它）——
+        // 两处读同一个源，才不会出现「开关显示蓝牙、面板显示 WiFi」的错位。
+        // 先比再 check：check() 会回调监听器，多余调用会把用户的选择写回 Prefs
+        int transportButton = prefs.getTransport() == Transport.WIFI
+                ? R.id.transport_wifi : R.id.transport_bluetooth;
+        if (transportGroup.getCheckedButtonId() != transportButton) {
+            transportGroup.check(transportButton);
+        }
 
         ConnectionMode mode = snapshot.mode() == TransmitterState.Mode.CLIENT
                 ? ConnectionMode.CLIENT : ConnectionMode.SERVER;
