@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">GPS蓝牙传输</string>
+    <string name="app_name">GPS共享</string>
 
     <!-- 底部导航 -->
     <string name="nav_home">传输</string>
@@ -9,7 +9,7 @@
     <string name="nav_settings">设置</string>
 
     <!-- 主页 -->
-    <string name="home_title">GPS蓝牙传输</string>
+    <string name="home_title">GPS共享</string>
     <string name="home_subtitle">NMEA 0183 蓝牙串口输出</string>
     <string name="home_mode_title">连接方式</string>
     <string name="home_mode_server">等待被连接</string>
