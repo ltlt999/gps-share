@@ -32,6 +32,35 @@ public final class MockLocationInjector {
     }
 
     /**
+     * 让系统「模拟位置应用」列表里出现本应用。
+     *
+     * Android 的开发者选项 → 选择模拟位置信息应用，列表是系统在运行期
+     * 缓存的——光安装 APK 不会自动出现，必须有某次成功调用过
+     * {@link LocationManager#addTestProvider}，系统才会把本应用登记进去。
+     * 所以在应用启动时调一次——失败也没关系（未授权时 SecurityException），
+     * 反正 {@link #start()} 里还会再调并捕获。
+     *
+     * 这是个静态方法：不需要实例，不需要状态，不依赖任何注入上下文。
+     */
+    public static void ensureRegistered(Context context) {
+        LocationManager manager = (LocationManager)
+                context.getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
+        if (manager == null) {
+            return;
+        }
+        try {
+            manager.addTestProvider(LocationManager.GPS_PROVIDER,
+                    false, false, false, false, true, true, true,
+                    Criteria.POWER_LOW, Criteria.ACCURACY_FINE);
+            manager.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true);
+        } catch (SecurityException ignored) {
+            // 未授权：等用户在开发者选项里选上之后才有用，先静默
+        } catch (IllegalArgumentException ignored) {
+            // 已注册：重复调用本来就该是幂等的
+        }
+    }
+
+    /**
      * 尝试安装测试提供者。
      *
      * @return true 表示已就绪；false 表示本应用不是当前选定的模拟位置应用
