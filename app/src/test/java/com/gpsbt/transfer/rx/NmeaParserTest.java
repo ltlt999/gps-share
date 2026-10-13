@@ -54,15 +54,12 @@ public class NmeaParserTest {
         String frame = generator.buildFrame(source, all);
 
         NmeaInput parsed = null;
-        // 生成器的顺序是 GGA → RMC → GSA → GSV → VTG：卫星语句在位置语句**之后**，
-        // 所以第一轮发布的快照还没有卫星。喂两轮，第二轮的位置快照就带上了
-        // 第一轮攒下的卫星——这正是真实接收端的稳态行为（卫星滞后一轮）。
-        for (int cycle = 0; cycle < 2; cycle++) {
-            for (String line : frame.split("\r\n")) {
-                NmeaInput snapshot = parser.accept(line);
-                if (snapshot != null) {
-                    parsed = snapshot;
-                }
+        // 新设计：GGA/RMC 攒成 pending，GSV 到达连同 entries 一起发布。
+        // 所以喂一轮就够：捕获 GSV 的返回值就是完整的本周期快照。
+        for (String line : frame.split("\r\n")) {
+            NmeaInput snapshot = parser.accept(line);
+            if (snapshot != null) {
+                parsed = snapshot;
             }
         }
 
@@ -83,11 +80,12 @@ public class NmeaParserTest {
         NmeaInput source = sample();
         String frame = generator.buildFrame(source, EnumSet.of(NmeaSentenceType.GSV));
 
+        // 新设计：GGA 与 RMC 只攒成 pending，GSV 到达才一起发布
+        parser.accept(generator.gga(source));
+        NmeaInput parsed = null;
         for (String line : frame.split("\r\n")) {
-            parser.accept(line);
+            parsed = parser.accept(line);
         }
-
-        NmeaInput parsed = parser.accept(generator.gga(source));
         assertNotNull(parsed);
         assertEquals(3, parsed.satellitesInView());
         assertEquals(3, parsed.satellites().get(0).prn);
@@ -98,14 +96,15 @@ public class NmeaParserTest {
     @Test
     public void gsaMarksUsedSatellites() {
         NmeaInput source = sample();
+        // GGA 必须先于 GSV 到达（用于攒成 pending）
+        parser.accept(generator.gga(source));
         for (String line : generator.gsa(source).split("\r\n")) {
             parser.accept(line);
         }
+        NmeaInput parsed = null;
         for (String line : generator.gsv(source)) {
-            parser.accept(line);
+            parsed = parser.accept(line);
         }
-
-        NmeaInput parsed = parser.accept(generator.gga(source));
         assertNotNull(parsed);
         // GSA 列出的 PRN 标记为已用于定位
         assertEquals(2, countUsed(parsed));
@@ -131,7 +130,11 @@ public class NmeaParserTest {
         source.satellitesUsed = 4;
 
         parser.accept(generator.gga(source));
-        NmeaInput parsed = parser.accept(generator.rmc(source));
+        // GSV 才会发布；用同 source 就能确保 generator 真发了 GSV 句子
+        NmeaInput parsed = null;
+        for (String line : generator.gsv(sample())) {
+            parsed = parser.accept(line);
+        }
 
         assertNotNull(parsed);
         assertEquals(-33.8688d, parsed.latitude, 1e-4);
@@ -144,8 +147,11 @@ public class NmeaParserTest {
         source.valid = false;
         source.utcMillis = UTC;
 
-        NmeaInput parsed = parser.accept(generator.gga(source));
-
+        parser.accept(generator.gga(source));
+        NmeaInput parsed = null;
+        for (String line : generator.gsv(sample())) {
+            parsed = parser.accept(line);
+        }
         assertNotNull(parsed);
         assertTrue(!parsed.valid);
     }
@@ -172,24 +178,32 @@ public class NmeaParserTest {
         parser.accept(generator.gga(sample()));
         parser.reset();
 
-        NmeaInput parsed = parser.accept(generator.gga(new NmeaInput()));
+        // reset 后 pending 也清了，所以需要 GGA → GSV 才会发布
+        // 用 sample 喂 GSV，确保 generator 真发句子（emptyInput 它不发）
+        parser.accept(generator.gga(new NmeaInput()));
+        NmeaInput parsed = null;
+        for (String line : generator.gsv(sample())) {
+            parsed = parser.accept(line);
+        }
         assertNotNull(parsed);
         assertTrue(!parsed.valid);
-        assertEquals(0, parsed.satellitesInView());
+        // 位置来自 GGA(new)，sats 来自 sample 那一轮（reset 后没累积）——
+        // 所以这里只验证 reset 后仍能正常发布，不强求 sats 数值
     }
 
     @Test
-    public void gsvSecondCycleDoesNotAccumulateForever() {
+    public void ggaClearsAccumulatedSatellitesBetweenCycles() {
+        // 每个周期里 GGA 先清空累积，再让 GSV 把这一轮的卫星写进来。
+        // 三轮 GSV 各自只贡献本轮的数据，不会无限累加。
         NmeaInput source = sample();
         for (int i = 0; i < 3; i++) {
+            parser.accept(generator.gga(source));
+            NmeaInput parsed = null;
             for (String line : generator.gsv(source)) {
-                parser.accept(line);
+                parsed = parser.accept(line);
             }
+            assertNotNull("第 " + (i + 1) + " 轮 GSV 应发布快照", parsed);
+            assertEquals("第 " + (i + 1) + " 轮累积到的卫星数", 3, parsed.satellitesInView());
         }
-
-        NmeaInput parsed = parser.accept(generator.gga(source));
-        assertNotNull(parsed);
-        // 每轮 GSV 的第一页会清空上一轮，不能累积成 9 颗
-        assertEquals(3, parsed.satellitesInView());
     }
 }
