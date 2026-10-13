@@ -47,12 +47,14 @@ public final class NmeaParser {
     private final List<SatEntry> entries = new ArrayList<>();
     private final Set<Integer> usedPrns = new HashSet<>();
     /**
-     * 本周期 GGA/RMC 设进去的快照，等待 GSV 到齐后携带卫星列表一起发布。
-     * 必须等到 GSV，否则 {@code satellitesInView} 跟不上 {@code satellitesUsed}：
-     * GSV 总是排在位置语句之后，一个周期内先到的 GGA/RMC 不知道
-     * 上一轮积累的卫星是否被新一周期覆盖了。
+     * 本周期是否已有 GGA（或 RMC）设过位置。GSV 到达时用 state 里的位置
+     * 配合 entries 里的卫星打包成快照。
+     *
+     * 不用"发布过"标志——GSV 在一个周期里会到多次（多星座 / 多页），
+     * 每次到达都要发布一次，最后一次携带完整卫星列表。中间值会被后续
+     * GSV 覆盖，所以 UI 最终显示的是正确数字。
      */
-    private NmeaInput pending;
+    private boolean hasFix;
 
     /** 清空累积状态（断线重连时调用）。 */
     public void reset() {
@@ -68,20 +70,22 @@ public final class NmeaParser {
         state.clearSats();
         entries.clear();
         usedPrns.clear();
-        pending = null;
+        hasFix = false;
     }
 
     /**
      * 喂入一行。
      *
-     * 发布策略：GGA 与 RMC 一起"攒"成 pending，等本周期第一个 GSV 到达时
-     * 一起发布（带上当时的 entries）。这样 {@code satellitesUsed} 与
-     * {@code satellitesInView} 来自同一周期，避免数字对不上。
+     * 发布策略：本周期 GGA（也接受 RMC）到达后标记已就位；之后每条 GSV 都
+     * 用当前 {@code state}（位置 + 速度 + satellitesUsed）加上累积的
+     * {@code entries} 打包成快照发布。多次 GSV 覆盖式发布，最后一条携带
+     * 本周期全部卫星。{@code satellitesUsed} 与 {@code satellitesInView}
+     * 始终来自同一周期。
      *
-     * 边界：若 GSV 被禁用，pending 要等下一个 GGA 才发出——这之间 UI 上的
-     * 卫星数会是上一周期的值（仍然内部一致，因为 pending 还没发）。
+     * 边界：若 GSV 被禁用，GSV 不到，hasFix 一直为 true；下一周期 GGA 来了
+     * 会把上一周期的"占位"发出（sats 为空），保证不会卡死。
      *
-     * @return 快照（pending 解锁后连同 entries 一起发布），或 null
+     * @return 快照（GSV 每条都返，其他句子返 null），或 null
      */
     public NmeaInput accept(String line) {
         if (line == null) {
@@ -102,20 +106,19 @@ public final class NmeaParser {
         // 形如 GPGGA / BDGSV：末三位是语句类型
         String type = f[0].substring(f[0].length() - 3).toUpperCase(Locale.US);
         if ("GGA".equals(type)) {
-            // 新一周期的确定起点：先把上一周期仍未发出的 pending 发出去，
-            // 然后清空卫星累积（多星座时不能靠 GSV page 1 清，那是每个
-            // 星座各自的第一页，会把前一个星座的数据全清掉）。
-            NmeaInput leftover = publishPending();
+            // 新一周期的确定起点：先把上一周期遗留的"占位"发出去（覆盖式），
+            // 然后清空累积。
+            NmeaInput leftover = publishIfHasFix();
             entries.clear();
             usedPrns.clear();
             if (applyGga(f)) {
-                pending = state.copy();
+                hasFix = true;
             }
             return leftover;
         }
         if ("RMC".equals(type)) {
             if (applyRmc(f)) {
-                pending = state.copy();
+                hasFix = true;
             }
             return null;
         }
@@ -124,21 +127,22 @@ public final class NmeaParser {
             return null;
         }
         if ("GSV".equals(type)) {
-            // 不在这里清 entries：多星座的 GSV 是分组的，每组都有自己的 page 1
+            // 不在这里清 entries：多星座的 GSV 是按 talker 分组的，每组
+            // 都有自己的 page 1，若按 page<=1 清会把前一个星座的累积数据全清掉。
             applyGsv(f);
-            // GSV 到了，把 pending 带上当前累积的卫星列表发布出去
-            return publishPending();
+            // GSV 到了：连同当前累积的卫星列表一起发布。多星座多页会发布多次，
+            // 最后一次携带完整卫星列表——把中间值覆盖掉。
+            return publishIfHasFix();
         }
         return null;
     }
 
-    /** 发布 pending（带上当前 entries），发布后清空。返回 null 表示没有可发布的。 */
-    private NmeaInput publishPending() {
-        if (pending == null) {
+    /** 用 state（位置 + satellitesUsed）与当前 entries 打包快照；hasFix=false 时返 null。 */
+    private NmeaInput publishIfHasFix() {
+        if (!hasFix) {
             return null;
         }
-        NmeaInput snap = pending;
-        pending = null;
+        NmeaInput snap = state.copy();
         snap.clearSats();
         for (SatEntry entry : entries) {
             snap.addSat(new NmeaInput.Sat(entry.prn, entry.elevation, entry.azimuth,
