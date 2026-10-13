@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- 定位 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 旧版模拟位置权限：Android 6+ 已是 signature 级，第三方应用声明
+         也不会被授予，但少数 ROM（特别是老 MIUI / EMUI）仍会据此把应用
+         列入「选择模拟位置应用」。现代 AOSP 上是 no-op，所以加上没坏处。
+         lint 要求这种权限只能放在 debug manifest，工具链上白名单放行。 -->
+    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION"
+        tools:ignore="MockLocation" />
 
     <!-- WiFi 传输：TCP 服务端与 UDP 服务发现（普通权限，无运行时弹窗） -->
     <uses-permission android:name="android.permission.INTERNET" />

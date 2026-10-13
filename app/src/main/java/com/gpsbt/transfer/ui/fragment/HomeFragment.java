@@ -158,6 +158,9 @@ public class HomeFragment extends Fragment
         inputHost.setText(prefs.getLastServerHost());
         inputPort.setText(String.valueOf(prefs.getLastServerPort()));
 
+        // 再次尝试登记——App.onCreate 时可能因系统尚未就绪而失败
+        com.gpsbt.transfer.rx.MockLocationInjector.ensureRegistered(requireContext());
+
         roleGroup.addOnButtonCheckedListener(
                 new MaterialButtonToggleGroup.OnButtonCheckedListener() {
                     @Override
@@ -166,8 +169,15 @@ public class HomeFragment extends Fragment
                         if (!isChecked) {
                             return;
                         }
-                        prefs.setRole(checkedId == R.id.role_receive
-                                ? Role.RECEIVE : Role.SHARE);
+                        Role role = checkedId == R.id.role_receive
+                                ? Role.RECEIVE : Role.SHARE;
+                        prefs.setRole(role);
+                        // 切到接收角色时再次登记一次：有些 ROM 在 App.onCreate 那一刻
+                        // 还没准备好，回主界面时再试一次
+                        if (role == Role.RECEIVE) {
+                            com.gpsbt.transfer.rx.MockLocationInjector.ensureRegistered(
+                                    requireContext());
+                        }
                         renderPanels();
                     }
                 });

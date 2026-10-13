@@ -6,6 +6,7 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.SystemClock;
+import android.util.Log;
 
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.state.LogBus;
@@ -22,6 +23,8 @@ import com.gpsbt.transfer.state.LogBus;
  * 它读的是解析出来的 GSV，不经过系统。
  */
 public final class MockLocationInjector {
+
+    private static final String TAG = "MockLocationInjector";
 
     private final Context context;
     private LocationManager manager;
@@ -46,6 +49,7 @@ public final class MockLocationInjector {
         LocationManager manager = (LocationManager)
                 context.getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
         if (manager == null) {
+            Log.w(TAG, "ensureRegistered: LocationManager 为空（设备无定位服务？）");
             return;
         }
         try {
@@ -53,10 +57,15 @@ public final class MockLocationInjector {
                     false, false, false, false, true, true, true,
                     Criteria.POWER_LOW, Criteria.ACCURACY_FINE);
             manager.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true);
-        } catch (SecurityException ignored) {
-            // 未授权：等用户在开发者选项里选上之后才有用，先静默
-        } catch (IllegalArgumentException ignored) {
-            // 已注册：重复调用本来就该是幂等的
+            Log.i(TAG, "ensureRegistered: addTestProvider 成功，本应用已登记为 GPS 模拟提供者");
+        } catch (SecurityException e) {
+            // 未被选为「模拟位置信息应用」时，部分 ROM（特别是国产定制）会拒
+            // 绝注册——这时只能等用户在开发者选项里选上本应用后再调一次
+            Log.w(TAG, "ensureRegistered: addTestProvider 抛 SecurityException（" + e.getMessage() +
+                    "）——本应用尚未被设为「模拟位置信息应用」，请到开发者选项里选上");
+        } catch (IllegalArgumentException e) {
+            // 重复 addTestProvider 时抛这个；已经登记过，幂等
+            Log.i(TAG, "ensureRegistered: addTestProvider 重复调用（已登记）");
         }
     }
 
