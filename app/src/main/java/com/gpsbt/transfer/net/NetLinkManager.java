@@ -27,6 +27,13 @@ import java.util.List;
 public final class NetLinkManager implements Link {
 
     private static final int READ_BUFFER = 256;
+    /**
+     * 接收端硬关机（拔电 / 崩溃）时 TCP 不会发 FIN 或 RST，服务器读线程会一直
+     * 阻塞、内核要 15 分钟才放弃重传——对端就成了「在线列表里下不掉的幽灵」。
+     * 接收端每 5 秒回一次心跳，这里据此把超时没心跳的连接扫掉。
+     */
+    private static final long PEER_IDLE_TIMEOUT_MILLIS = 20000L;
+    private static final long SWEEP_INTERVAL_MILLIS = 5000L;
 
     private final int port;
     private final Link.Listener listener;
@@ -38,6 +45,7 @@ public final class NetLinkManager implements Link {
     /** accept 线程写、stop() 读，跨线程故 volatile。 */
     private volatile ServerSocket server;
     private Thread acceptThread;
+    private Thread sweepThread;
 
     public NetLinkManager(int port, Link.Listener listener) {
         this.port = port;
@@ -58,6 +66,43 @@ public final class NetLinkManager implements Link {
             }
         }, "net-accept");
         acceptThread.start();
+        sweepThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                sweepLoop();
+            }
+        }, "net-sweep");
+        // 守护线程：stop() 后最多睡一个扫描周期就退出，不必等它自然结束
+        sweepThread.setDaemon(true);
+        sweepThread.start();
+    }
+
+    /**
+     * 扫掉「已经死了但 TCP 没告诉我们」的接收端。
+     *
+     * 只对发过心跳的对端生效（lastReceivedAt > 0）。从不发数据的对端——例如 PC
+     * 上只读的串口工具——保持原有行为：靠 FIN/RST 或写失败来判定断开，不会被误踢。
+     */
+    private void sweepLoop() {
+        while (!stopping) {
+            try {
+                Thread.sleep(SWEEP_INTERVAL_MILLIS);
+            } catch (InterruptedException e) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            for (PeerRegistry.Client client : registry.snapshot()) {
+                long last = client.lastReceivedAt();
+                if (last <= 0 || now - last <= PEER_IDLE_TIMEOUT_MILLIS) {
+                    continue;
+                }
+                registry.remove(client);
+                client.close();
+                LogBus.get().log(LogBus.Level.WARN,
+                        "WiFi 接收端心跳超时，已断开：" + client.address());
+                postPeerLeft(client.address());
+            }
+        }
     }
 
     /** 幂等：重复调用不做事，也不再触发回调。 */
@@ -234,6 +279,8 @@ public final class NetLinkManager implements Link {
         private InputStream in;
         private Thread reader;
         private volatile boolean alive = true;
+        /** 最后一次收到该客户端任何字节的时刻；0 表示从未收到过（不做超时判断）。 */
+        private volatile long lastReceivedAt;
 
         TcpClient(Socket socket, String address) {
             this.socket = socket;
@@ -243,6 +290,11 @@ public final class NetLinkManager implements Link {
         @Override
         public String address() {
             return address;
+        }
+
+        @Override
+        public long lastReceivedAt() {
+            return lastReceivedAt;
         }
 
         /** 只取流，不起读线程——由 attach() 决定何时启动，以固定回调顺序。 */
@@ -299,7 +351,9 @@ public final class NetLinkManager implements Link {
                 if (length < 0) {
                     break;
                 }
-                // 接收端不发数据，收到即忽略
+                // 内容本身忽略，但「收到了」这件事要记下来：接收端靠它回心跳，
+                // 我们靠它判断对端是不是还活着（硬关机时 TCP 不会发 FIN）
+                lastReceivedAt = System.currentTimeMillis();
             }
             if (!alive || stopping) {
                 // 已经关过了（close()/closeAll），或服务正在停止——都不该再回调

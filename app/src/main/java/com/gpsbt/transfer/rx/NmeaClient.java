@@ -23,6 +23,15 @@ public final class NmeaClient {
     private static final Charset ASCII = Charset.forName("US-ASCII");
     private static final long RECONNECT_DELAY_MILLIS = 5000L;
     private static final int CONNECT_TIMEOUT_MILLIS = 5000;
+    /**
+     * 心跳：一行 NMEA 注释（`#` 开头是标准注释，任何 NMEA 解析器都会忽略）。
+     *
+     * 必须发：本机硬关机（拔电 / 崩溃）时不会给服务器发 FIN 或 RST，服务器读
+     * 线程会一直阻塞、内核要 15 分钟才放弃重传——那台设备就会永远留在发送端的
+     * 「在线接收端」列表里下不掉。心跳让服务器能在 20 秒内发现我们没了。
+     */
+    private static final byte[] HEARTBEAT = "#GPSSHARE-HB\n".getBytes(ASCII);
+    private static final long HEARTBEAT_INTERVAL_MILLIS = 5000L;
 
     /** 回调一律在主线程。 */
     public interface Callback {
@@ -72,16 +81,21 @@ public final class NmeaClient {
 
     private void connectLoop() {
         while (running) {
+            Thread heartbeat = null;
             try {
                 Socket created = new Socket();
                 created.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MILLIS);
                 socket = created;
                 parser.reset();
                 postConnection(true, "已连接 " + host + ":" + port);
+                heartbeat = startHeartbeat(created);
                 readLoop(created);
             } catch (IOException e) {
                 postConnection(false, "连接失败：" + e.getMessage());
             } finally {
+                if (heartbeat != null) {
+                    heartbeat.interrupt();
+                }
                 closeSocket();
             }
             if (!running) {
@@ -113,6 +127,36 @@ public final class NmeaClient {
                 });
             }
         }
+    }
+
+    /**
+     * 心跳线程：每 5 秒往服务器写一行注释。
+     *
+     * 读循环是阻塞的，心跳必须另起线程。写失败说明链路已断，直接退出——
+     * readLoop 那边会同时感知到断开并走重连。
+     */
+    private Thread startHeartbeat(final Socket active) {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (running && !active.isClosed()) {
+                    try {
+                        active.getOutputStream().write(HEARTBEAT);
+                        active.getOutputStream().flush();
+                    } catch (IOException e) {
+                        return;
+                    }
+                    try {
+                        Thread.sleep(HEARTBEAT_INTERVAL_MILLIS);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                }
+            }
+        }, "nmea-heartbeat");
+        thread.setDaemon(true);
+        thread.start();
+        return thread;
     }
 
     private void postConnection(final boolean connected, final String message) {

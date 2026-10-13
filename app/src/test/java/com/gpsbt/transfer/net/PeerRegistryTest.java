@@ -49,6 +49,11 @@ public class PeerRegistryTest {
                 throw new IllegalStateException("关闭失败");
             }
         }
+
+        @Override
+        public long lastReceivedAt() {
+            return 0L;
+        }
     }
 
     @Test
