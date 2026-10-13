@@ -4,8 +4,11 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
+import com.gpsbt.transfer.link.Role;
 import com.gpsbt.transfer.service.GpsOutputService;
+import com.gpsbt.transfer.service.ReceiveService;
 import com.gpsbt.transfer.state.LogBus;
+import com.gpsbt.transfer.util.Prefs;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -37,26 +40,35 @@ public class BootReceiver extends BroadcastReceiver {
         if (action == null || !BOOT_ACTIONS.contains(action)) {
             return;
         }
-        if (!com.gpsbt.transfer.util.Prefs.get(context).isAutoStartOnBoot()) {
+        Prefs prefs = Prefs.get(context);
+        if (!prefs.isAutoStartOnBoot()) {
             LogBus.get().log(LogBus.Level.INFO, "开机自动传输未开启，跳过");
             return;
         }
-        if (GpsOutputService.isRunning()) {
+
+        // 按角色分流：接收角色要拉起 ReceiveService，而不是发送端
+        boolean receive = prefs.getRole() == Role.RECEIVE;
+        if (receive ? ReceiveService.isRunning() : GpsOutputService.isRunning()) {
             LogBus.get().log(LogBus.Level.INFO, "传输已在运行，跳过重复启动");
             return;
         }
 
         // 必须在 startForegroundService 之前检查：Android 14+ 缺定位权限就启动
         // location 型前台服务会抛 SecurityException 导致闪退
-        String blocked = GpsOutputService.prerequisiteFailure(context);
+        String blocked = receive
+                ? ReceiveService.prerequisiteFailure(context)
+                : GpsOutputService.prerequisiteFailure(context);
         if (blocked != null) {
             BootNotifier.reportBlocked(context, blocked);
             return;
         }
 
-        LogBus.get().log(LogBus.Level.INFO, "收到开机广播（" + action + "），启动自动传输");
-        GpsOutputService.startFromBoot(context,
-                com.gpsbt.transfer.util.Prefs.get(context).getMode(),
-                com.gpsbt.transfer.util.Prefs.get(context).getLastDeviceMac());
+        LogBus.get().log(LogBus.Level.INFO, "收到开机广播（" + action + "），启动自动"
+                + (receive ? "接收" : "传输"));
+        if (receive) {
+            ReceiveService.start(context, prefs.getLastServerHost(), prefs.getLastServerPort());
+        } else {
+            GpsOutputService.startFromBoot(context, prefs.getMode(), prefs.getLastDeviceMac());
+        }
     }
 }

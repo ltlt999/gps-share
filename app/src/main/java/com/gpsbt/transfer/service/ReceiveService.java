@@ -16,6 +16,7 @@ import androidx.core.app.ServiceCompat;
 
 import com.gpsbt.transfer.MainActivity;
 import com.gpsbt.transfer.R;
+import com.gpsbt.transfer.engine.LocationProvider;
 import com.gpsbt.transfer.link.Peer;
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.rx.MockLocationInjector;
@@ -45,6 +46,11 @@ public class ReceiveService extends Service {
     private static final String CHANNEL_ID = "gps_share_receive";
 
     private static volatile boolean running;
+    /**
+     * 当前活着的服务实例。停止时直接用它，不走 startService(ACTION_STOP)——
+     * 那条路在服务没运行时会把服务重新拉起来再立刻停掉，表现为「要点两次才停」。
+     */
+    private static volatile ReceiveService instance;
 
     private Prefs prefs;
     private TransmitterState state;
@@ -55,6 +61,8 @@ public class ReceiveService extends Service {
     private long startedAt;
     /** 已接收的定位条数，供通知展示。发送端用 TransmitStats，接收端自己数。 */
     private volatile long received;
+    /** 停止幂等守卫：stopSelfSafely 被多次调用时只真正执行一次。 */
+    private boolean stopped;
 
     public static boolean isRunning() {
         return running;
@@ -73,15 +81,40 @@ public class ReceiveService extends Service {
         }
     }
 
+    /**
+     * 停止接收。**幂等**：没有活实例时什么都不做。
+     *
+     * 不能用 startService(ACTION_STOP)——服务没运行时那条路会把服务重新拉起来
+     * 再立刻停掉，用户体感就是「停止按钮点第一次反而启动了，要点第二次」。
+     */
     public static void stop(Context context) {
-        Intent intent = new Intent(context, ReceiveService.class);
-        intent.setAction(ACTION_STOP);
-        context.getApplicationContext().startService(intent);
+        ReceiveService local = instance;
+        if (local == null) {
+            LogBus.get().log(LogBus.Level.INFO, "接收本就未在运行，无需停止");
+            return;
+        }
+        local.stopSelfSafely();
+    }
+
+    /**
+     * 启动接收端的前置条件。
+     *
+     * @return null 表示可以启动；否则返回不可启动的原因文案
+     */
+    public static String prerequisiteFailure(Context context) {
+        if (!LocationProvider.hasPermission(context)) {
+            return context.getString(R.string.boot_reason_location);
+        }
+        if (Prefs.get(context).getLastServerHost().isEmpty()) {
+            return context.getString(R.string.receive_host_required);
+        }
+        return null;
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
+        instance = this;
         prefs = Prefs.get(this);
         state = TransmitterState.get();
         createChannel();
@@ -111,6 +144,7 @@ public class ReceiveService extends Service {
         }
 
         stopExisting();
+        stopped = false;
         running = true;
         startedAt = System.currentTimeMillis();
         state.setPhase(TransmitterState.Phase.RUNNING);
@@ -255,7 +289,12 @@ public class ReceiveService extends Service {
                 .build();
     }
 
+    /** 幂等：重复调用只真正执行一次，避免二次停止时把状态又写脏。 */
     private synchronized void stopSelfSafely() {
+        if (stopped) {
+            return;
+        }
+        stopped = true;
         running = false;
         stopExisting();
         state.resetForStop();
@@ -266,6 +305,9 @@ public class ReceiveService extends Service {
     @Override
     public void onDestroy() {
         stopSelfSafely();
+        if (instance == this) {
+            instance = null;
+        }
         super.onDestroy();
     }
 

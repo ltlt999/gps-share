@@ -2,7 +2,9 @@ package com.gpsbt.transfer.boot;
 
 import android.content.Context;
 
+import com.gpsbt.transfer.link.Role;
 import com.gpsbt.transfer.service.GpsOutputService;
+import com.gpsbt.transfer.service.ReceiveService;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.util.Prefs;
 
@@ -55,6 +57,24 @@ public final class BootAutoStart {
         // 开关关闭时不标记 attempted：用户随后可能在设置里把它打开
         if (!prefs.isAutoStartOnBoot()) {
             return false;
+        }
+
+        // 角色决定启动哪条流水线。之前这里写死发送端，于是选了「接收 GPS」
+        // 的用户在开机自启后拉起来的是发送端——界面显示在跑，热点 GPS 却
+        // 一直没连上，必须手动停一次再开才对。
+        if (prefs.getRole() == Role.RECEIVE) {
+            String receiveBlocked = ReceiveService.prerequisiteFailure(context);
+            if (receiveBlocked != null) {
+                BootNotifier.reportBlocked(context, receiveBlocked);
+                return false;
+            }
+            if (attempted || ReceiveService.isRunning()) {
+                return false;
+            }
+            attempted = true;
+            LogBus.get().log(LogBus.Level.INFO, "界面冷启动，自动开始接收");
+            ReceiveService.start(context, prefs.getLastServerHost(), prefs.getLastServerPort());
+            return true;
         }
 
         // 前置条件不满足时绝不能启动服务：Android 14+ 缺定位权限就启动 location 型

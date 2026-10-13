@@ -1,6 +1,7 @@
 package com.gpsbt.transfer.ui.fragment;
 
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -172,11 +173,21 @@ public class HomeFragment extends Fragment
                         Role role = checkedId == R.id.role_receive
                                 ? Role.RECEIVE : Role.SHARE;
                         prefs.setRole(role);
-                        // 切到接收角色时再次登记一次：有些 ROM 在 App.onCreate 那一刻
-                        // 还没准备好，回主界面时再试一次
+                        Context app = getContext() == null
+                                ? null : getContext().getApplicationContext();
+                        // 切角色时停掉另一条流水线，否则两条会同时往
+                        // 同一个 TransmitterState 里写，互相把对方的状态冲掉
                         if (role == Role.RECEIVE) {
-                            com.gpsbt.transfer.rx.MockLocationInjector.ensureRegistered(
-                                    requireContext());
+                            if (app != null && GpsOutputService.isRunning()) {
+                                GpsOutputService.stop(app);
+                            }
+                            // 切到接收角色时再次登记一次：有些 ROM 在 App.onCreate
+                            // 那一刻还没准备好，回主界面时再试一次
+                            if (app != null) {
+                                com.gpsbt.transfer.rx.MockLocationInjector.ensureRegistered(app);
+                            }
+                        } else if (app != null && ReceiveService.isRunning()) {
+                            ReceiveService.stop(app);
                         }
                         renderPanels();
                     }
@@ -269,14 +280,39 @@ public class HomeFragment extends Fragment
     }
 
     private void onPulseClicked() {
+        // 「有东西在跑」优先于角色判断：开机自启或角色切换都可能让两条流水线
+        // 同时在跑，这时按停止必须一次停干净，而不是先看角色去走「启动」分支
+        if (anyServiceRunning()) {
+            stopAllServices();
+            return;
+        }
         if (prefs.getRole() == Role.RECEIVE) {
-            onReceivePulseClicked();
+            onReceiveStart();
             return;
         }
-        if (state.phase() == TransmitterState.Phase.RUNNING) {
-            GpsOutputService.stop(requireContext());
+        onShareStart();
+    }
+
+    /** 两个服务任一在跑就算「在传输」。 */
+    private boolean anyServiceRunning() {
+        return GpsOutputService.isRunning() || ReceiveService.isRunning();
+    }
+
+    /** 一次停干净两个服务。没在跑的不去动——去动会把没运行的服务重新拉起来。 */
+    private void stopAllServices() {
+        Context app = getContext() == null ? null : getContext().getApplicationContext();
+        if (app == null) {
             return;
         }
+        if (GpsOutputService.isRunning()) {
+            GpsOutputService.stop(app);
+        }
+        if (ReceiveService.isRunning()) {
+            ReceiveService.stop(app);
+        }
+    }
+
+    private void onShareStart() {
         if (prefs.getTransport() == Transport.BLUETOOTH
                 && prefs.getMode() == ConnectionMode.CLIENT
                 && (selectedMac == null || selectedMac.isEmpty())) {
@@ -287,22 +323,21 @@ public class HomeFragment extends Fragment
                     .show();
             return;
         }
+        // 权限对话框期间用户可能已经离开这个 Fragment，届时 requireContext()
+        // 会抛 IllegalStateException 直接闪退。这里提前取好 applicationContext。
+        final Context app = requireContext().getApplicationContext();
         if (getActivity() instanceof HomeCallbacks) {
             ((HomeCallbacks) getActivity()).requestStartPermissions(new Runnable() {
                 @Override
                 public void run() {
-                    GpsOutputService.start(requireContext(), prefs.getMode(), selectedMac);
+                    GpsOutputService.start(app, prefs.getMode(), selectedMac);
                 }
             });
         }
     }
 
-    /** 接收角色：已连接则断开，否则按输入框的地址去连。 */
-    private void onReceivePulseClicked() {
-        if (ReceiveService.isRunning()) {
-            ReceiveService.stop(requireContext());
-            return;
-        }
+    /** 接收角色：按输入框的地址连上发送端。 */
+    private void onReceiveStart() {
         String host = inputHost.getText() == null ? "" : inputHost.getText().toString().trim();
         if (host.isEmpty()) {
             new MaterialAlertDialogBuilder(requireContext())
@@ -316,13 +351,13 @@ public class HomeFragment extends Fragment
         prefs.setLastServerHost(host);
         prefs.setLastServerPort(port);
         inputPort.setText(String.valueOf(port));
-        final String target = host;
         // 模拟位置注入同样需要定位权限，因此走与发送端相同的授权入口
+        final Context app = requireContext().getApplicationContext();
         if (getActivity() instanceof HomeCallbacks) {
             ((HomeCallbacks) getActivity()).requestStartPermissions(new Runnable() {
                 @Override
                 public void run() {
-                    ReceiveService.start(requireContext(), target, port);
+                    ReceiveService.start(app, host, port);
                 }
             });
         }
@@ -392,7 +427,7 @@ public class HomeFragment extends Fragment
         statusText.setText(snapshot.statusText().isEmpty()
                 ? getString(statusTextRes) : snapshot.statusText());
         boolean receiveRunning = ReceiveService.isRunning();
-        pulseButton.setState(running || receiveRunning
+        pulseButton.setState(running || receiveRunning || GpsOutputService.isRunning()
                 ? PulseButtonView.State.RUNNING : PulseButtonView.State.IDLE);
 
         // 角色与传输方式都是用户偏好，事实源是 Prefs。
