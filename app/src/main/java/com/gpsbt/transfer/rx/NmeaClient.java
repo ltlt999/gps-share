@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.Charset;
+import java.util.List;
 
 /**
  * 接收端 TCP 客户端：连上发送端，按行读 NMEA，解析后回调。
@@ -42,7 +43,16 @@ public final class NmeaClient {
         void onLocation(NmeaInput location);
     }
 
-    private final String host;
+    /**
+     * 候选地址的来源。**每次尝试前都会重新问一次**——接收端可能比 WiFi
+     * 先起来，那时网关还拿不到；等网络连上后再问就能拿到发送端地址了。
+     */
+    public interface TargetProvider {
+        /** 按优先级排列的候选地址；没有可用的返回空列表。 */
+        List<String> targets();
+    }
+
+    private final TargetProvider provider;
     private final int port;
     private final Callback callback;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -50,11 +60,18 @@ public final class NmeaClient {
 
     private volatile boolean running;
     private Socket socket;
+    /** 当前正在尝试（或已连上）的地址，供界面展示。 */
+    private volatile String currentHost = "";
 
-    public NmeaClient(String host, int port, Callback callback) {
-        this.host = host;
+    public NmeaClient(TargetProvider provider, int port, Callback callback) {
+        this.provider = provider;
         this.port = port;
         this.callback = callback;
+    }
+
+    /** 当前正在用（或正在尝试）的地址；还没开始尝试时为空串。 */
+    public String currentHost() {
+        return currentHost;
     }
 
     public void start() {
@@ -80,18 +97,28 @@ public final class NmeaClient {
     }
 
     private void connectLoop() {
+        int index = 0;
         while (running) {
+            List<String> hosts = provider.targets();
+            if (hosts == null || hosts.isEmpty()) {
+                postConnection(false, "还没有可用的发送端地址（等待热点连接…）");
+                sleepQuietly(RECONNECT_DELAY_MILLIS);
+                continue;
+            }
+            String target = hosts.get(index % hosts.size());
+            currentHost = target;
             Thread heartbeat = null;
+            String failure = null;
             try {
                 Socket created = new Socket();
-                created.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MILLIS);
+                created.connect(new InetSocketAddress(target, port), CONNECT_TIMEOUT_MILLIS);
                 socket = created;
                 parser.reset();
-                postConnection(true, "已连接 " + host + ":" + port);
+                postConnection(true, "已连接 " + target + ":" + port);
                 heartbeat = startHeartbeat(created);
                 readLoop(created);
             } catch (IOException e) {
-                postConnection(false, "连接失败：" + e.getMessage());
+                failure = e.getMessage();
             } finally {
                 if (heartbeat != null) {
                     heartbeat.interrupt();
@@ -101,12 +128,27 @@ public final class NmeaClient {
             if (!running) {
                 return;
             }
-            postConnection(false, "连接已断开，5 秒后重连");
-            try {
-                Thread.sleep(RECONNECT_DELAY_MILLIS);
-            } catch (InterruptedException e) {
-                return;
+            if (failure != null) {
+                // 这个地址连不上：换下一个候选。
+                // 「连上过又断开」不换——那多半是发送端在重启，原地重试就行。
+                index++;
             }
+            postConnection(false, failure == null
+                    ? "连接已断开，5 秒后重连"
+                    : "连不上 " + target + "（" + failure + "），5 秒后换地址重试");
+            sleepQuietly(RECONNECT_DELAY_MILLIS);
+        }
+    }
+
+    /**
+     * 循环里的等待。被打断也**不退出**——重连循环的生死只由 {@code running}
+     * 决定，否则一次无关的 interrupt 就会让接收端永远停在这里。
+     */
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ignored) {
+            // 有意吞掉：循环条件自己会判断该不该继续
         }
     }
 

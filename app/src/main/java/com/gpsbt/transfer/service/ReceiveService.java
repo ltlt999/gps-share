@@ -18,6 +18,7 @@ import com.gpsbt.transfer.MainActivity;
 import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.engine.LocationProvider;
 import com.gpsbt.transfer.link.Peer;
+import com.gpsbt.transfer.net.NetworkTargets;
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.rx.MockLocationInjector;
 import com.gpsbt.transfer.rx.NmeaClient;
@@ -30,6 +31,7 @@ import com.gpsbt.transfer.util.Prefs;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
 /**
  * 接收端前台服务：连发送端 → 解析 NMEA → 注入系统定位。
  *
@@ -105,9 +107,8 @@ public class ReceiveService extends Service {
         if (!LocationProvider.hasPermission(context)) {
             return context.getString(R.string.boot_reason_location);
         }
-        if (Prefs.get(context).getLastServerHost().isEmpty()) {
-            return context.getString(R.string.receive_host_required);
-        }
+        // 地址不再是硬性条件：拿不到时客户端会原地等，热点连上后靠
+        // 「默认网关」也能找到发送端
         return null;
     }
 
@@ -128,13 +129,14 @@ public class ReceiveService extends Service {
             return START_NOT_STICKY;
         }
         host = intent.getStringExtra(EXTRA_HOST);
-        port = intent.getIntExtra(EXTRA_PORT, prefs.getLastServerPort());
-        if (host == null || host.trim().isEmpty()) {
-            LogBus.get().log(LogBus.Level.ERROR, "未指定发送端地址");
-            stopSelfSafely();
-            return START_NOT_STICKY;
+        if (host == null) {
+            host = "";
         }
+        host = host.trim();
+        port = intent.getIntExtra(EXTRA_PORT, prefs.getLastServerPort());
 
+        // 地址留空也允许启动：接收端可能比 WiFi 先起来，等网络连上后
+        // 候选地址（记下的 + 默认网关）自然就有了，客户端会自己连上。
         try {
             goForeground();
         } catch (SecurityException e) {
@@ -148,16 +150,18 @@ public class ReceiveService extends Service {
         running = true;
         startedAt = System.currentTimeMillis();
         state.setPhase(TransmitterState.Phase.RUNNING);
-        state.setStatusText("正在连接 " + host + ":" + port);
+        state.setStatusText(host.isEmpty()
+                ? "正在等待热点连接…" : "正在连接 " + host + ":" + port);
 
         injector = new MockLocationInjector(this);
         if (!injector.start()) {
             state.setStatusText(getString(R.string.receive_mock_denied));
         } else {
-            state.setStatusText("已就绪，正在连接 " + host + ":" + port);
+            state.setStatusText(host.isEmpty()
+                    ? "已就绪，正在等待热点连接…" : "已就绪，正在连接 " + host + ":" + port);
         }
 
-        client = new NmeaClient(host, port, callback);
+        client = new NmeaClient(targetProvider, port, callback);
         client.start();
         refreshNotification();
         return START_NOT_STICKY;
@@ -173,6 +177,30 @@ public class ReceiveService extends Service {
             injector = null;
         }
     }
+
+    /**
+     * 候选发送端地址，每次尝试前重新问一次。
+     *
+     * 先试记下的地址；再试**当前默认网关**——接收端连在发送端热点上，网关
+     * 就是发送端本身。记下的地址可能失效（热点重启后网段会变），网关则永远
+     * 是当前有效的。网络还没连上时两者都可能拿不到，这时客户端会原地等待，
+     * 等 WiFi 连上后自然就能连上发送端。
+     */
+    private final NmeaClient.TargetProvider targetProvider = new NmeaClient.TargetProvider() {
+        @Override
+        public List<String> targets() {
+            List<String> targets = new ArrayList<>();
+            String remembered = prefs.getLastServerHost();
+            if (remembered != null && !remembered.isEmpty()) {
+                targets.add(remembered);
+            }
+            String gateway = NetworkTargets.defaultGateway(ReceiveService.this);
+            if (!gateway.isEmpty() && !targets.contains(gateway)) {
+                targets.add(gateway);
+            }
+            return targets;
+        }
+    };
 
     private final NmeaClient.Callback callback = new NmeaClient.Callback() {
         @Override
