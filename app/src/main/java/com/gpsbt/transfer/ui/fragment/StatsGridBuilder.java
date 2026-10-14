@@ -27,10 +27,16 @@ final class StatsGridBuilder {
     private StatsGridBuilder() {
     }
 
-    static void build(GridLayout grid, Map<String, StatCardView> target) {
+    /**
+     * 按角色填充数据卡片。
+     *
+     * 接收端**不创建**「发送速率」卡（它不发送，那张卡没有意义）。注意不能
+     * 建了再 setVisibility(GONE)——GridLayout 仍会给 GONE 的孩子留格子，
+     * 结果是在网格中间留一个洞，后面的卡被挤得七零八落。
+     */
+    static void build(GridLayout grid, Map<String, StatCardView> target, boolean receive) {
         // 每次重建视图都会调到这里，而 cards 是 Fragment 的字段、跨视图存活。
-        // 先清干净：目前键固定所以 put 会覆盖，但键集合一旦变化就会残留上一轮
-        // 的卡片，且旧的 View 已经不在布局里，表现为「某张卡永远不更新」。
+        // 先清干净：键集合会随角色变化，不清就会残留上一轮的卡片。
         target.clear();
         grid.removeAllViews();
         add(grid, target, KEY_FIX, R.string.stat_fix, R.drawable.ic_stat_location,
@@ -47,8 +53,13 @@ final class StatsGridBuilder {
                 R.string.value_unknown);
         add(grid, target, KEY_ALTITUDE, R.string.stat_altitude, R.drawable.ic_stat_altitude,
                 R.string.value_unknown);
-        add(grid, target, KEY_SENTENCES, R.string.stat_sentences, R.drawable.ic_stat_send, "0");
-        add(grid, target, KEY_RATE, R.string.stat_rate, R.drawable.ic_stat_speed, "0");
+        // 接收端这里显示的是「已接收条数」，与发送端语义不同，标题跟着换
+        add(grid, target, KEY_SENTENCES,
+                receive ? R.string.stat_received : R.string.stat_sentences,
+                R.drawable.ic_stat_send, "0");
+        if (!receive) {
+            add(grid, target, KEY_RATE, R.string.stat_rate, R.drawable.ic_stat_speed, "0");
+        }
         add(grid, target, KEY_DEVICE, R.string.stat_device, R.drawable.ic_stat_bluetooth,
                 R.string.value_unknown);
         add(grid, target, KEY_UPTIME, R.string.stat_uptime, R.drawable.ic_stat_uptime,

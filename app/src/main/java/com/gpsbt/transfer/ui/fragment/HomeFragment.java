@@ -95,6 +95,8 @@ public class HomeFragment extends Fragment
     private ServerAdapter serverAdapter;
     private DiscoveryListener discoveryListener;
     private String selectedMac;
+    /** 当前数据卡片是按哪个角色建的；null 表示还没建（视图刚创建）。 */
+    private Boolean builtRole;
 
     @Nullable
     @Override
@@ -147,7 +149,9 @@ public class HomeFragment extends Fragment
         inputPort = view.findViewById(R.id.input_port);
         statsGrid = view.findViewById(R.id.stats_grid);
 
-        StatsGridBuilder.build(statsGrid, cards);
+        // 数据卡片交给 renderPanels() → ensureGridForRole() 按当前角色建，
+        // 这里不建，避免建两次
+        builtRole = null;
 
         deviceAdapter = new PairedDeviceAdapter(devices, this);
         deviceList.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -610,17 +614,7 @@ public class HomeFragment extends Fragment
         boolean client = prefs.getMode() == ConnectionMode.CLIENT;
 
         renderSubtitle(receive, wifi);
-        // 接收端不发送，硬套「已发送语句 / 发送速率」只会显示 0，反而让人
-        // 以为出了问题。这里按角色改标题，并隐藏用不上的速率卡。
-        StatCardView sentencesCard = cards.get(StatsGridBuilder.KEY_SENTENCES);
-        if (sentencesCard != null) {
-            sentencesCard.setTitle(getString(receive
-                    ? R.string.stat_received : R.string.stat_sentences));
-        }
-        StatCardView rateCard = cards.get(StatsGridBuilder.KEY_RATE);
-        if (rateCard != null) {
-            rateCard.setVisibility(receive ? View.GONE : View.VISIBLE);
-        }
+        ensureGridForRole(receive);
 
         // 传输方式对两个角色都有意义：共享端用它选发出去的方式，
         // 接收端用它选收进来的方式
@@ -662,6 +656,24 @@ public class HomeFragment extends Fragment
                         ? R.string.home_mode_client_hint : R.string.home_mode_server_hint);
             }
         }
+    }
+
+    /**
+     * 角色变了就重建数据卡片。
+     *
+     * 接收端少一张「发送速率」，卡片集合不同——必须**重建**而不是把那张卡
+     * setVisibility(GONE)：GridLayout 仍会给 GONE 的孩子留格子，网格中间
+     * 会出现一个洞，后面的卡被挤得七零八落。
+     *
+     * 只在角色真的变了时才重建：render() 每秒都会跑，无脑重建等于每秒造
+     * 十几张卡。
+     */
+    private void ensureGridForRole(boolean receive) {
+        if (builtRole != null && builtRole.booleanValue() == receive) {
+            return;
+        }
+        builtRole = Boolean.valueOf(receive);
+        StatsGridBuilder.build(statsGrid, cards, receive);
     }
 
     /** 顶部小字随角色与传输方式变化——写死「蓝牙串口输出」在 WiFi 模式下是错的。 */
