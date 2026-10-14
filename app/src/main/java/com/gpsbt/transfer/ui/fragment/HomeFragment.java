@@ -165,6 +165,16 @@ public class HomeFragment extends Fragment
         // 再次尝试登记——App.onCreate 时可能因系统尚未就绪而失败
         com.gpsbt.transfer.rx.MockLocationInjector.ensureRegistered(requireContext());
 
+        // ⚠️ 顺序关键：先把三个开关同步到 Prefs 的当前值，再挂监听。
+        // check() 会回调监听器，顺序反了会在每次进入本页时误触发一次
+        // 「配置已改，重启流水线」，把正在跑的连接拆掉——对端读到 EOF，
+        // 表现为反复断开重连。
+        //
+        // 为什么会「每次进入本页」：MainActivity.switchTo() 用 replace() 切页，
+        // 本 Fragment 实例虽然被缓存，但视图每次都会重建，onViewCreated 重新
+        // inflate 出来的开关一项都没选中，getCheckedButtonId() 是 NO_ID。
+        syncTogglesFromPrefs();
+
         roleGroup.addOnButtonCheckedListener(
                 new MaterialButtonToggleGroup.OnButtonCheckedListener() {
                     @Override
@@ -175,6 +185,10 @@ public class HomeFragment extends Fragment
                         }
                         Role role = checkedId == R.id.role_receive
                                 ? Role.RECEIVE : Role.SHARE;
+                        // 值没变就别动正在跑的流水线（理由同下面 transport 那条）
+                        if (prefs.getRole() == role) {
+                            return;
+                        }
                         prefs.setRole(role);
                         Context app = getContext() == null
                                 ? null : getContext().getApplicationContext();
@@ -210,8 +224,12 @@ public class HomeFragment extends Fragment
                         }
                         Transport transport = checkedId == R.id.transport_wifi
                                 ? Transport.WIFI : Transport.BLUETOOTH;
-                        prefs.setTransport(transport);
-                        restartRunningService();
+                        // 只在真的变了才重启：check() 有可能被程序侧调用
+                        // （render 里同步选中项），那时不该打断正在跑的连接
+                        if (prefs.getTransport() != transport) {
+                            prefs.setTransport(transport);
+                            restartRunningService();
+                        }
                         renderPanels();
                     }
                 });
@@ -226,9 +244,12 @@ public class HomeFragment extends Fragment
                         }
                         ConnectionMode mode = checkedId == R.id.mode_client
                                 ? ConnectionMode.CLIENT : ConnectionMode.SERVER;
-                        prefs.setMode(mode);
                         state.setMode(mode);
-                        restartRunningService();
+                        // 同上：只在真的变了才重启流水线
+                        if (prefs.getMode() != mode) {
+                            prefs.setMode(mode);
+                            restartRunningService();
+                        }
                         renderPanels();
                     }
                 });
@@ -306,6 +327,22 @@ public class HomeFragment extends Fragment
             return;
         }
         onShareStart();
+    }
+
+    /**
+     * 把三个分段控件同步到 Prefs 的当前值。**必须在挂监听之前调用**。
+     *
+     * 控件重建后一项都没选中，此时任何 check() 都是一次「变化」，会回调监听器；
+     * 而监听器里带着「重启流水线」的副作用，就会把正在跑的连接拆掉。
+     * 先同步好，后续 render() 里的 check() 因为选中项已经一致而不会触发回调。
+     */
+    private void syncTogglesFromPrefs() {
+        roleGroup.check(prefs.getRole() == Role.RECEIVE
+                ? R.id.role_receive : R.id.role_share);
+        transportGroup.check(prefs.getTransport() == Transport.WIFI
+                ? R.id.transport_wifi : R.id.transport_bluetooth);
+        modeGroup.check(prefs.getMode() == ConnectionMode.CLIENT
+                ? R.id.mode_client : R.id.mode_server);
     }
 
     /** 两个服务任一在跑就算「在传输」。 */
