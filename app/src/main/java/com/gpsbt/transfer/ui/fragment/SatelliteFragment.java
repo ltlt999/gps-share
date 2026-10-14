@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.state.TransmitterState;
+import com.gpsbt.transfer.ui.SatelliteOrder;
 import com.gpsbt.transfer.ui.adapter.SatelliteAdapter;
 import com.gpsbt.transfer.ui.view.SatelliteRadarView;
 
@@ -76,6 +77,9 @@ public class SatelliteFragment extends Fragment implements TransmitterState.List
         if (state.phase() == TransmitterState.Phase.RUNNING) {
             data.addAll(state.satellites());
         }
+        // 正在用于定位的排前面，同组按信噪比从高到低——好用的先看到。
+        // 雷达图按方位/仰角画点，与顺序无关，一起排不影响它。
+        SatelliteOrder.sort(data);
         adapter.notifyDataSetChanged();
         radarView.submit(data);
         emptyView.setVisibility(data.isEmpty() ? View.VISIBLE : View.GONE);

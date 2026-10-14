@@ -59,7 +59,7 @@
 | 重复启动防护 | 重复的启动请求会先清理旧流水线，避免两个监听服务并存导致「两端已连接但收不到数据」 |
 | 后台持续运行 | 前台服务 + 常驻通知，切后台/锁屏仍工作，通知内可一键停止 |
 | 实时运行数据 | 定位状态、卫星数、经纬度、速度、航向、海拔、已发语句、速率、连接设备 |
-| 卫星星图 | 天空雷达（方位/仰角/信噪比）+ 明细列表，每颗星带**所属星座的国旗**（GPS🇺🇸 / 北斗🇨🇳 / GLONASS🇷🇺 / Galileo🇪🇺 / QZSS🇯🇵 / NavIC🇮🇳） |
+| 卫星星图 | 天空雷达（方位/仰角/信噪比）+ 明细列表，每颗星带**所属星座的国旗**（GPS🇺🇸 / 北斗🇨🇳 / GLONASS🇷🇺 / Galileo🇪🇺 / QZSS🇯🇵 / NavIC🇮🇳）。明细按**在用优先、信噪比降序**排列 |
 | 运行日志 | 实时日志，支持复制、清空、导出；按「普通 / 卫星 / 数据 / 全部」分类筛选。**收发两端对称**：发送端记发出去的语句，接收端记收到的 |
 | 最低兼容 Android 7.0 | minSdk 24，覆盖绝大多数在用设备 |
 | 开机自启（可选，默认关） | 开启后每次重启自动按上次的传输方式与设备开始传输 |
@@ -159,7 +159,7 @@ adb install -r 构建目录/app/outputs/apk/debug/app-debug.apk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest
 ```
 
-覆盖范围（103 个用例）：
+覆盖范围（108 个用例）：
 
 - `NmeaChecksumTest`：XOR 校验和算法（含两个标准样例 `*47` / `*6A`）、两位十六进制补零、`\r\n` 结尾
 - `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关
@@ -175,6 +175,7 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitT
 - `FormattersTest`：中文数值格式化、时长
 - `ConstellationsTest`：星座 talker → 国旗映射、六个星座旗标互不相同、未知 talker 回落到中性旗
 - `NmeaLogTest`：NMEA 语句分类（GSV/GSA 归「卫星」、其余归「数据」）、去空白、空行忽略、保持到达顺序
+- `SatelliteOrderTest`：卫星明细排序（在用优先、同组按信噪比降序、相同则保持原序、无信号沉底、空表安全）
 
 测试报告：`构建目录\app\reports\tests\testDebugUnitTest\index.html`
 
@@ -234,6 +235,7 @@ app/src/main/java/com/gpsbt/transfer/
 ├── nmea/                          NMEA 生成与解析基础（无 Android 依赖）
 ├── state/                         TransmitterState 状态中心 / TransmitStats / LogBus / NmeaLog
 ├── ui/Constellations.java         星座 talker → 国旗图标与名称
+├── ui/SatelliteOrder.java         卫星明细排序（在用优先、信噪比降序）
 ├── ui/fragment/                   Home / Satellite / Log / Settings
 ├── ui/view/                       PulseButtonView / SatelliteRadarView / StatCardView
 ├── ui/adapter/                    设备 / 卫星 / 日志 / 对端 / 服务器列表
