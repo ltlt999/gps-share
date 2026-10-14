@@ -580,6 +580,11 @@ public class GpsOutputService extends Service {
                     logSentence(keepalive);
                 }
             }
+            // 把引擎的计数同步到对外状态。**必须在这里做**：界面与通知都读
+            // stats，不写的话「已发送语句」永远是 0（原版 v1.4.6 就有这个
+            // 毛病——通知读的是 engine.sentences()，卡片读的是 stats.sentences，
+            // 两个计数器只有前者被更新过）。
+            stats.sentences = current.sentences();
         } catch (IOException e) {
             LogBus.get().log(LogBus.Level.ERROR, "发送失败：" + e.getMessage());
             if (mode == ConnectionMode.SERVER) {
@@ -804,7 +809,9 @@ public class GpsOutputService extends Service {
             text.append(Formatters.latitude(fix.latitude))
                     .append("　").append(Formatters.longitude(fix.longitude));
         }
-        long sent = engine == null ? 0 : engine.sentences();
+        // 与界面卡片读同一个来源：都读 stats.sentences。
+        // 以前这里直接读 engine.sentences()，于是通知的数字对、卡片永远是 0
+        long sent = stats.sentences;
         long started = stats.startedAt;
         text.append("　").append(getString(R.string.notif_stats, sent,
                 Formatters.duration(started == 0 ? -1 : System.currentTimeMillis() - started)));
