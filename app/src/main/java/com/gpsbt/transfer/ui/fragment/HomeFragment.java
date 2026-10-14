@@ -727,6 +727,15 @@ public class HomeFragment extends Fragment
                 new DiscoveryListener.Callback() {
                     @Override
                     public void onServers(List<ServerTable.Server> servers) {
+                        // 发布到状态中心：接收服务重连时会把它当候选地址。
+                        // 这样网段变了以后，不用等用户手点「发现的发送端」
+                        // 也能自己连上新地址。
+                        List<String> hosts = new ArrayList<String>();
+                        for (ServerTable.Server server : servers) {
+                            hosts.add(server.host);
+                        }
+                        state.setDiscoveredHosts(hosts);
+
                         if (!isAdded()) {
                             return;
                         }
@@ -742,6 +751,9 @@ public class HomeFragment extends Fragment
             discoveryListener.stop();
             discoveryListener = null;
         }
+        // 发现停了就把发布出去的地址也清掉：留着陈旧的会让接收服务
+        // 拿着过期的地址反复重试
+        state.setDiscoveredHosts(null);
     }
 
     /** 刷新热点地址与端口；检测不到热点时给出引导。 */

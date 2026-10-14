@@ -111,6 +111,13 @@ public final class TransmitterState {
     private volatile Mode mode = Mode.SERVER;
     private volatile List<Peer> peers = Collections.emptyList();
     private volatile Device pendingDevice;
+    /**
+     * 界面发现到的发送端地址，供接收服务重连时当候选。
+     *
+     * 由界面发布（服务发现监听器在 Fragment 里），服务读取——接收端网段
+     * 变了以后靠这个能直接找到新地址，不必等用户手点。
+     */
+    private volatile List<String> discoveredHosts = Collections.emptyList();
     private volatile String serviceName = "";
     private volatile String uuid = "";
     private volatile int rateHz = 1;
@@ -243,6 +250,23 @@ public final class TransmitterState {
         peers = value == null
                 ? Collections.<Peer>emptyList()
                 : Collections.unmodifiableList(new ArrayList<>(value));
+        notifyListeners();
+    }
+
+    /** 界面发现到的发送端地址。 */
+    public List<String> discoveredHosts() {
+        return discoveredHosts;
+    }
+
+    /** 只在真的变了时才通知，避免每 500 毫秒的发现轮询把界面刷个不停。 */
+    public void setDiscoveredHosts(List<String> value) {
+        List<String> next = value == null
+                ? Collections.<String>emptyList()
+                : Collections.unmodifiableList(new ArrayList<>(value));
+        if (next.equals(discoveredHosts)) {
+            return;
+        }
+        discoveredHosts = next;
         notifyListeners();
     }
 

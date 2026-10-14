@@ -15,6 +15,10 @@
 
     <!-- WiFi 传输：TCP 服务端与 UDP 服务发现（普通权限，无运行时弹窗） -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 读网络网关地址：接收端拿它当发送端的兜底地址。少了这条，
+         getActiveNetwork()/getLinkProperties() 会抛 SecurityException，
+         兜底逻辑会静默失效（普通权限，无运行时弹窗） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- 蓝牙：旧版 -->
     <uses-permission

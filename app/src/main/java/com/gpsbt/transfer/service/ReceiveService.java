@@ -326,10 +326,20 @@ public class ReceiveService extends Service {
         @Override
         public List<String> targets() {
             List<String> targets = new ArrayList<>();
+            // 1) 界面刚发现到的发送端：网段变了以后这个最准，
+            //    不必等用户手点，也不依赖网关推断
+            for (String discovered : state.discoveredHosts()) {
+                if (discovered != null && !discovered.isEmpty() && !targets.contains(discovered)) {
+                    targets.add(discovered);
+                }
+            }
+            // 2) 上次连上的地址：网段没变时最快
             String remembered = prefs.getLastServerHost();
-            if (remembered != null && !remembered.isEmpty()) {
+            if (remembered != null && !remembered.isEmpty() && !targets.contains(remembered)) {
                 targets.add(remembered);
             }
+            // 3) 当前 WiFi 网络的网关：接收端连在发送端热点上时，网关就是发送端。
+            //    界面不在前台、发现停了的时候靠它兜底。
             String gateway = NetworkTargets.defaultGateway(ReceiveService.this);
             if (!gateway.isEmpty() && !targets.contains(gateway)) {
                 targets.add(gateway);
