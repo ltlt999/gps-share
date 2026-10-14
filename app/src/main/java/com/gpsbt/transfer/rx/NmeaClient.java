@@ -5,6 +5,7 @@ import android.os.Looper;
 
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.state.LogBus;
+import com.gpsbt.transfer.state.NmeaLog;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -151,6 +152,9 @@ public final class NmeaClient implements ReceiveLink {
                 new InputStreamReader(active.getInputStream(), ASCII));
         String line;
         while (running && (line = reader.readLine()) != null) {
+            // 收到的每一条都记日志：与发送端对称，日志页的「卫星 / 数据」
+            // 筛选在接收角色下也有内容
+            NmeaLog.sentence(line);
             final NmeaInput parsed = parser.accept(line);
             if (parsed != null) {
                 main.post(new Runnable() {

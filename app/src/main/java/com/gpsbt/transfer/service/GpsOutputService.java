@@ -36,6 +36,7 @@ import com.gpsbt.transfer.nmea.NmeaGenerator;
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
 import com.gpsbt.transfer.state.LogBus;
+import com.gpsbt.transfer.state.NmeaLog;
 import com.gpsbt.transfer.state.TransmitterState;
 import com.gpsbt.transfer.state.TransmitStats;
 import com.gpsbt.transfer.ui.view.SatelliteRadarView;
@@ -565,13 +566,7 @@ public class GpsOutputService extends Service {
 
     /** 原始 NMEA 语句按类别记录：卫星语句（GSV/GSA）单独一类，便于日志筛选。 */
     private static void logSentence(String sentence) {
-        String text = sentence == null ? "" : sentence.trim();
-        if (text.isEmpty()) {
-            return;
-        }
-        String upper = text.toUpperCase(Locale.US);
-        LogBus.get().log(upper.contains("GSV") || upper.contains("GSA")
-                ? LogBus.Level.SAT : LogBus.Level.DATA, text);
+        NmeaLog.sentence(sentence);
     }
 
     private final LocationProvider.Callback locationCallback = new LocationProvider.Callback() {
