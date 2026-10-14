@@ -45,11 +45,11 @@
 | 功能 | 说明 |
 |---|---|
 | 角色切换 | 「共享 GPS」与「接收 GPS」，同一 APK 两个角色 |
-| 传输方式切换 | 共享角色下可选 **蓝牙** 或 **WiFi(TCP)** |
+| 传输方式切换 | 两个角色都可选 **蓝牙** 或 **WiFi(TCP)** |
 | 蓝牙两种连接方式 | 「等待被连接」（手机做 SPP 服务端）与「主动连接」（手机连已配对设备） |
 | WiFi 多接收端 | 一台手机可同时给多台设备供 GPS；界面实时列出在线接收端 |
 | 服务发现 | 发送端每秒广播 UDP 信标，接收端自动列出可用发送端，免手输 IP |
-| 接收端 | 连 TCP、解析 NMEA、通过「模拟位置」注入系统定位，导航 App 直接可用 |
+| 接收端 | **蓝牙或 WiFi 二选一**，解析 NMEA 并通过「模拟位置」注入系统定位，导航 App 直接可用 |
 | 标准 NMEA 输出 / 解析 | `$GPGGA` / `$GPRMC` / `$GPGSA` / `$GPGSV` / `$GPVTG` / `$GPZDA`，含 XOR 校验和，`\r\n` 结尾 |
 | 按星座分组发送 | GSV 按卫星系统分组（`$GP`/`$BD`/`$GL`/`$GA`/`$GI` talker），接收端可准确区分 GPS/北斗/GLONASS/Galileo |
 | 发送频率可调 | 1–10 Hz，滑块实时调节 |
@@ -59,7 +59,7 @@
 | 重复启动防护 | 重复的启动请求会先清理旧流水线，避免两个监听服务并存导致「两端已连接但收不到数据」 |
 | 后台持续运行 | 前台服务 + 常驻通知，切后台/锁屏仍工作，通知内可一键停止 |
 | 实时运行数据 | 定位状态、卫星数、经纬度、速度、航向、海拔、已发语句、速率、连接设备 |
-| 卫星星图 | 天空雷达（方位/仰角/信噪比）+ 卫星明细列表 |
+| 卫星星图 | 天空雷达（方位/仰角/信噪比）+ 明细列表，每颗星带**所属星座的国旗**（GPS🇺🇸 / 北斗🇨🇳 / GLONASS🇷🇺 / Galileo🇪🇺 / QZSS🇯🇵 / NavIC🇮🇳） |
 | 运行日志 | 实时日志，支持复制、清空、导出；按「普通 / 卫星 / 数据 / 全部」分类筛选 |
 | 最低兼容 Android 7.0 | minSdk 24，覆盖绝大多数在用设备 |
 | 开机自启（可选，默认关） | 开启后每次重启自动按上次的传输方式与设备开始传输 |
@@ -104,7 +104,7 @@
 4. 点「停止传输」或通知里的「停止传输」会立即停止服务、断开链路、释放资源；退出界面同样停止。
 5. 蓝牙未开启时只弹系统授权对话框，由用户决定是否开启，不会静默开启。
 
-**开启「设置 → 开机自动开始传输」后**，每次重启会按上次的传输方式与设备自动开始传输（**只对共享角色生效，接收角色不自动启动**）。约束如下：
+**开启「设置 → 开机自动开始传输」后**，每次重启会**按当前角色**自动开始——共享角色拉起发送端，接收角色拉起接收端，都按上次的传输方式与目标设备。约束如下：
 
 | 系统版本 | 行为 |
 |---|---|
@@ -159,7 +159,7 @@ adb install -r 构建目录/app/outputs/apk/debug/app-debug.apk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest
 ```
 
-覆盖范围（93 个用例）：
+覆盖范围（97 个用例）：
 
 - `NmeaChecksumTest`：XOR 校验和算法（含两个标准样例 `*47` / `*6A`）、两位十六进制补零、`\r\n` 结尾
 - `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关
@@ -173,6 +173,7 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitT
 - `ServerTableTest`：过期剔除、排序、跨线程同步契约
 - `LogBusTest`：监听回调、缓冲区上限、时间戳
 - `FormattersTest`：中文数值格式化、时长
+- `ConstellationsTest`：星座 talker → 国旗映射、六个星座旗标互不相同、未知 talker 回落到中性旗
 
 测试报告：`构建目录\app\reports\tests\testDebugUnitTest\index.html`
 
@@ -193,7 +194,9 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitT
 | `WRITE_EXTERNAL_STORAGE` | ≤ Android 9 | 导出日志到「下载」目录 |
 | `RECEIVE_BOOT_COMPLETED` | 全部 | 开机自启（开关默认关闭） |
 
-未申请：`BLUETOOTH_SCAN`、`ACCESS_BACKGROUND_LOCATION`、`WAKE_LOCK`、`ACCESS_MOCK_LOCATION`（系统签名权限，声明无用——靠开发者选项授权）。
+另声明了 `ACCESS_MOCK_LOCATION`（Android 6+ 已是系统签名权限，第三方应用不会被授予，但少数老 ROM 会据此把应用列入「选择模拟位置应用」）。
+
+未申请：`BLUETOOTH_SCAN`、`ACCESS_BACKGROUND_LOCATION`、`WAKE_LOCK`。
 
 ## 源码结构
 
@@ -214,9 +217,12 @@ app/src/main/java/com/gpsbt/transfer/
 │   ├── DiscoveryBroadcaster.java  发送端：周期性 UDP 广播
 │   ├── DiscoveryListener.java     接收端：监听信标
 │   ├── ServerTable.java           发现到的发送端表（过期剔除）
+│   ├── NetworkTargets.java        默认网关（接收端的热点兜底地址）
 │   └── HotspotAddresses.java      本机 IPv4 枚举与热点网卡识别
 ├── rx/                            接收端流水线
-│   ├── NmeaClient.java            TCP 客户端 + 断线重连
+│   ├── ReceiveLink.java           接收通道抽象（TCP / 蓝牙两种实现）
+│   ├── NmeaClient.java            WiFi：TCP 客户端 + 多地址轮换重连
+│   ├── BluetoothNmeaClient.java   蓝牙：RFCOMM 客户端 + 重连
 │   ├── NmeaParser.java            NMEA → 定位快照（与生成器互逆）
 │   └── MockLocationInjector.java  注入系统模拟位置
 ├── service/
@@ -226,6 +232,7 @@ app/src/main/java/com/gpsbt/transfer/
 ├── engine/LocationProvider.java   LocationManager / GnssStatus 封装
 ├── nmea/                          NMEA 生成与解析基础（无 Android 依赖）
 ├── state/                         TransmitterState 状态中心 / TransmitStats / LogBus
+├── ui/Constellations.java         星座 talker → 国旗图标与名称
 ├── ui/fragment/                   Home / Satellite / Log / Settings
 ├── ui/view/                       PulseButtonView / SatelliteRadarView / StatCardView
 ├── ui/adapter/                    设备 / 卫星 / 日志 / 对端 / 服务器列表

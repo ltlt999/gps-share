@@ -1,0 +1,14 @@
+<!-- QZSS：日本。白底 + 红圆 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21dp"
+    android:height="14dp"
+    android:viewportWidth="21"
+    android:viewportHeight="14">
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 h21 v14 h-21 z" />
+    <path
+        android:fillColor="#BC002D"
+        android:pathData="M10.5,7 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

@@ -23,13 +23,21 @@ public class SatelliteRadarView extends View {
         public final int azimuthDeg;
         public final int snr;
         public final boolean used;
+        /** 星座 talker（GP/BD/GL/GA/GQ/GI），用于在明细里显示对应国旗；可能为 null。 */
+        public final String talker;
 
         public Sat(int prn, int elevationDeg, int azimuthDeg, int snr, boolean used) {
+            this(prn, elevationDeg, azimuthDeg, snr, used, null);
+        }
+
+        public Sat(int prn, int elevationDeg, int azimuthDeg, int snr, boolean used,
+                   String talker) {
             this.prn = prn;
             this.elevationDeg = elevationDeg;
             this.azimuthDeg = azimuthDeg;
             this.snr = snr;
             this.used = used;
+            this.talker = talker;
         }
     }
 

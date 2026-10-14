@@ -1,0 +1,14 @@
+<!-- 未知星座的占位旗：中性灰，避免列表里出现空洞 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21dp"
+    android:height="14dp"
+    android:viewportWidth="21"
+    android:viewportHeight="14">
+
+    <path
+        android:fillColor="#3A4150"
+        android:pathData="M0,0 h21 v14 h-21 z" />
+    <path
+        android:fillColor="#7A8496"
+        android:pathData="M10.5,7 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0" />
+</vector>

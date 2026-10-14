@@ -1,0 +1,14 @@
+<!-- 北斗：中国。简化版（红底 + 一颗黄五角星，省略四颗小星） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21dp"
+    android:height="14dp"
+    android:viewportWidth="21"
+    android:viewportHeight="14">
+
+    <path
+        android:fillColor="#DE2910"
+        android:pathData="M0,0 h21 v14 h-21 z" />
+    <path
+        android:fillColor="#FFDE00"
+        android:pathData="M4,2.6 L4.82,4.87 L7.23,4.95 L5.33,6.43 L6,8.75 L4,7.4 L2,8.75 L2.67,6.43 L0.77,4.95 L3.18,4.87 z" />
+</vector>

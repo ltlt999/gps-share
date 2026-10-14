@@ -1,0 +1,15 @@
+<!-- Galileo：欧盟。蓝底 + 黄星环（21×14 下 12 颗星不可辨，用星环代替） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21dp"
+    android:height="14dp"
+    android:viewportWidth="21"
+    android:viewportHeight="14">
+
+    <path
+        android:fillColor="#003399"
+        android:pathData="M0,0 h21 v14 h-21 z" />
+    <path
+        android:fillColor="#FFCC00"
+        android:fillType="evenOdd"
+        android:pathData="M10.5,7 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M10.5,7 m-2.8,0 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0" />
+</vector>

@@ -1,0 +1,20 @@
+<!-- GPS：美国。简化版（21×14 下细节不可辨，只保留可辨识特征：红白条纹 + 蓝色左上角） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21dp"
+    android:height="14dp"
+    android:viewportWidth="21"
+    android:viewportHeight="14">
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 h21 v14 h-21 z" />
+    <path
+        android:fillColor="#B22234"
+        android:pathData="M0,0 h21 v2 h-21 z M0,4 h21 v2 h-21 z M0,8 h21 v2 h-21 z M0,12 h21 v2 h-21 z" />
+    <path
+        android:fillColor="#3C3B6E"
+        android:pathData="M0,0 h9 v8 h-9 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M1.5,1.4 h1 v1 h-1 z M4,1.4 h1 v1 h-1 z M6.5,1.4 h1 v1 h-1 z M2.7,3.4 h1 v1 h-1 z M5.2,3.4 h1 v1 h-1 z M1.5,5.4 h1 v1 h-1 z M4,5.4 h1 v1 h-1 z M6.5,5.4 h1 v1 h-1 z" />
+</vector>

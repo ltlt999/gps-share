@@ -1,0 +1,17 @@
+<!-- GLONASS：俄罗斯。白 / 蓝 / 红 三横条 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21dp"
+    android:height="14dp"
+    android:viewportWidth="21"
+    android:viewportHeight="14">
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 h21 v4.67 h-21 z" />
+    <path
+        android:fillColor="#0039A6"
+        android:pathData="M0,4.67 h21 v4.66 h-21 z" />
+    <path
+        android:fillColor="#D52B1E"
+        android:pathData="M0,9.33 h21 v4.67 h-21 z" />
+</vector>

@@ -297,7 +297,7 @@ public class ReceiveService extends Service {
             List<SatelliteRadarView.Sat> converted = new ArrayList<SatelliteRadarView.Sat>();
             for (NmeaInput.Sat sat : location.satellites()) {
                 converted.add(new SatelliteRadarView.Sat(sat.prn, sat.elevationDeg,
-                        sat.azimuthDeg, sat.snr, sat.used));
+                        sat.azimuthDeg, sat.snr, sat.used, sat.talker));
             }
             state.setSatellites(converted);
             refreshNotification();
