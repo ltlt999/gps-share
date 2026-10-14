@@ -90,6 +90,18 @@ public class StatCardView extends LinearLayout {
         valueView.setText(text == null ? getContext().getString(R.string.value_unknown) : text);
     }
 
+    /**
+     * 允许数值换行。
+     *
+     * 默认是单行——数值（坐标、速度之类）本来就短，单行不会跳行更稳。
+     * 但「连接设备」这类卡片要列出多台设备的 IP，单行且无省略号时会被
+     * **硬裁掉**（表现为 192.168.1.100:60432 显示成 192.168.1.1）。
+     */
+    public void setValueMultiline(boolean multiline) {
+        valueView.setSingleLine(!multiline);
+        valueView.setMaxLines(multiline ? 6 : 1);
+    }
+
     public void setUnit(String text) {
         unitView.setText(text == null ? "" : text);
     }

@@ -585,20 +585,37 @@ public class HomeFragment extends Fragment
                 : Formatters.altitude(fix.altitudeM));
         set(StatsGridBuilder.KEY_SENTENCES,
                 String.valueOf(running ? snapshot.stats().sentences : 0));
+        // 两个角色都有速率卡，但量的是不同的东西，单位也不同
         set(StatsGridBuilder.KEY_RATE, String.format(Locale.US, "%.1f %s",
-                running ? snapshot.stats().rateHz : 0d, getString(R.string.unit_rate)));
+                running ? snapshot.stats().rateHz : 0d,
+                getString(prefs.getRole() == Role.RECEIVE
+                        ? R.string.unit_rate_received : R.string.unit_rate)));
         set(StatsGridBuilder.KEY_UPTIME, uptimeText(snapshot));
         List<Peer> peers = snapshot.peers();
-        if (peers.isEmpty()) {
-            set(StatsGridBuilder.KEY_DEVICE, unknown);
-        } else if (peers.size() == 1) {
-            set(StatsGridBuilder.KEY_DEVICE, peers.get(0).name);
-        } else {
-            set(StatsGridBuilder.KEY_DEVICE,
-                    getString(R.string.value_peer_count, peers.size()));
-        }
+        set(StatsGridBuilder.KEY_DEVICE, peerListText(peers));
         peerAdapter.submit(peers);
         peerEmpty.setVisibility(peers.isEmpty() ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * 「连接设备」卡的取值。
+     *
+     * 0 台显示 `--`；多台**逐行列出**各自的地址——这张卡占满整行且允许多行，
+     * 就是为了让 WiFi 模式下的多个 IP 都能看全（半宽单行时会被硬裁，
+     * 192.168.1.100:60432 只能看到 192.168.1.1）。
+     */
+    private String peerListText(List<Peer> peers) {
+        if (peers.isEmpty()) {
+            return getString(R.string.value_unknown);
+        }
+        StringBuilder builder = new StringBuilder();
+        for (Peer peer : peers) {
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append(peer.name);
+        }
+        return builder.toString();
     }
 
     private void set(String key, String value) {

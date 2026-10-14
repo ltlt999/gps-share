@@ -76,6 +76,9 @@ public class ReceiveService extends Service {
     private String runningConfig = "";
     /** 蓝牙模式下要连的设备名（缓存，避免每次刷新通知都查一遍蓝牙）。 */
     private String bluetoothTargetLabel = "";
+    /** 接收速率的统计窗口：每秒算一次上一秒收到了多少条。 */
+    private long rateWindowStart;
+    private long rateWindowSentences;
 
     public static boolean isRunning() {
         return running;
@@ -216,6 +219,29 @@ public class ReceiveService extends Service {
         }
         // 同发送端：旧链路的断开不会回调，显式清掉，避免「连接设备」残留
         state.setPeers(null);
+        rateWindowStart = 0L;
+        rateWindowSentences = 0L;
+        stats.rateHz = 0d;
+    }
+
+    /**
+     * 接收速率（条/秒）：每秒算一次上一秒收到了多少条。
+     *
+     * 按窗口算而不是取瞬时值——与发送端的 TransmitEngine 一个思路，
+     * 数字不会因为一两帧的抖动乱跳。
+     */
+    private void updateReceiveRate(long now) {
+        if (rateWindowStart == 0L) {
+            rateWindowStart = now;
+            rateWindowSentences = stats.sentences;
+            return;
+        }
+        long elapsed = now - rateWindowStart;
+        if (elapsed >= 1000L) {
+            stats.rateHz = (stats.sentences - rateWindowSentences) * 1000.0d / elapsed;
+            rateWindowStart = now;
+            rateWindowSentences = stats.sentences;
+        }
     }
 
     /**
@@ -334,6 +360,7 @@ public class ReceiveService extends Service {
         @Override
         public void onLocation(NmeaInput location) {
             stats.sentences++;
+            updateReceiveRate(System.currentTimeMillis());
             if (injector != null) {
                 injector.inject(location);
             }

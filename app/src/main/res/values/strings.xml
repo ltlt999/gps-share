@@ -62,6 +62,7 @@
     <string name="stat_altitude">海拔高度</string>
     <string name="stat_sentences">已发送语句</string>
     <string name="stat_rate">发送速率</string>
+    <string name="stat_rate_received">接收速率</string>
     <string name="stat_device">连接设备</string>
     <string name="stat_uptime">在线时长</string>
     <string name="stat_received">已接收条数</string>
@@ -74,6 +75,7 @@
     <string name="value_unknown">--</string>
     <string name="unit_satellites">颗</string>
     <string name="unit_rate">句/秒</string>
+    <string name="unit_rate_received">条/秒</string>
     <string name="unit_knots">节</string>
 
     <!-- 卫星页 -->
