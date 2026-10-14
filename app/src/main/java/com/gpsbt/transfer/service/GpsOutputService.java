@@ -78,6 +78,8 @@ public class GpsOutputService extends Service {
 
     /** 服务是否正在运行，供开机自启判断是否重复启动。 */
     private static volatile boolean running;
+    /** 当前链路是按什么配置建的；用来拦住重复的启动请求，避免拆掉正在跑的连接。 */
+    private volatile String runningConfig = "";
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> future;
@@ -231,6 +233,16 @@ public class GpsOutputService extends Service {
             return START_NOT_STICKY;
         }
 
+        // 幂等：已在按同一配置运行就什么都不做，绝不把正在跑的链路拆掉重来。
+        // 这一层守卫放在服务里（而不是只靠界面不误触发），因为配置的真相在
+        // 服务手上——界面、开机广播、通知动作都可能重复发启动请求，而界面
+        // 切页会重建视图，重建后的分段控件可能误触发一次启动。
+        String config = currentConfig();
+        if (running && config.equals(runningConfig)) {
+            LogBus.get().log(LogBus.Level.INFO, "发送配置未变，忽略重复的启动请求");
+            return START_NOT_STICKY;
+        }
+
         try {
             goForeground();
         } catch (SecurityException e) {
@@ -243,6 +255,7 @@ public class GpsOutputService extends Service {
         startedAt = System.currentTimeMillis();
         fixReceived = false;
         running = true;
+        runningConfig = config;
 
         if (!startPipeline()) {
             stopSelfSafely();
@@ -323,6 +336,22 @@ public class GpsOutputService extends Service {
                 }
             }
         }, 2, 2, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    /**
+     * 当前链路是按什么配置建的。
+     *
+     * 用来拦住**重复的启动请求**：界面切页会重建视图，重建后的分段控件可能
+     * 误触发一次启动；若这里不比对，就会把正在跑的链路拆掉重来，接收端读到
+     * EOF 后反复断开重连。
+     */
+    private String currentConfig() {
+        if (prefs.getTransport() == Transport.WIFI) {
+            return "WIFI:" + prefs.getWifiPort()
+                    + ":" + prefs.isDiscoveryEnabled() + ":" + prefs.getDiscoveryPort();
+        }
+        return "BT:" + mode + ":" + deviceMac
+                + ":" + prefs.getServiceName() + ":" + prefs.getUuid();
     }
 
     private boolean startTransmission(BluetoothAdapter adapter) {
@@ -826,6 +855,7 @@ public class GpsOutputService extends Service {
 
     private synchronized void stopSelfSafely() {
         running = false;
+        runningConfig = "";
         stopRelink();
         stopDiscovery();
         if (locationProvider != null) {

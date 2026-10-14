@@ -27,6 +27,11 @@ final class StatsGridBuilder {
     }
 
     static void build(GridLayout grid, Map<String, StatCardView> target) {
+        // 每次重建视图都会调到这里，而 cards 是 Fragment 的字段、跨视图存活。
+        // 先清干净：目前键固定所以 put 会覆盖，但键集合一旦变化就会残留上一轮
+        // 的卡片，且旧的 View 已经不在布局里，表现为「某张卡永远不更新」。
+        target.clear();
+        grid.removeAllViews();
         add(grid, target, KEY_FIX, R.string.stat_fix, R.drawable.ic_stat_location,
                 R.string.value_no_fix);
         add(grid, target, KEY_SATELLITES, R.string.stat_satellites, R.drawable.ic_nav_satellite,

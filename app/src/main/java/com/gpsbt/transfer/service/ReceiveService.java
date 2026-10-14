@@ -74,6 +74,10 @@ public class ReceiveService extends Service {
     private volatile long received;
     /** 停止幂等守卫：stopSelfSafely 被多次调用时只真正执行一次。 */
     private boolean stopped;
+    /** 当前流水线是按什么配置建的；用来判断重复的启动请求是否真的需要重启。 */
+    private String runningConfig = "";
+    /** 蓝牙模式下要连的设备名（缓存，避免每次刷新通知都查一遍蓝牙）。 */
+    private String bluetoothTargetLabel = "";
 
     public static boolean isRunning() {
         return running;
@@ -159,6 +163,15 @@ public class ReceiveService extends Service {
         host = host.trim();
         port = intent.getIntExtra(EXTRA_PORT, prefs.getLastServerPort());
 
+        // 幂等：已在按同一配置运行就什么都不做，绝不把正在跑的连接拆掉重来。
+        // 这一层守卫放在服务里（而不是只靠界面不误触发），因为配置的真相在
+        // 服务手上——界面、开机广播、通知动作都可能重复发启动请求。
+        String config = currentConfig();
+        if (running && config.equals(runningConfig)) {
+            LogBus.get().log(LogBus.Level.INFO, "接收配置未变，忽略重复的启动请求");
+            return START_NOT_STICKY;
+        }
+
         // 地址留空也允许启动：接收端可能比 WiFi 先起来，等网络连上后
         // 候选地址（记下的 + 默认网关）自然就有了，客户端会自己连上。
         try {
@@ -172,6 +185,7 @@ public class ReceiveService extends Service {
         stopExisting();
         stopped = false;
         running = true;
+        runningConfig = config;
         startedAt = System.currentTimeMillis();
         state.setPhase(TransmitterState.Phase.RUNNING);
         state.setStatusText(initialStatus());
@@ -217,10 +231,25 @@ public class ReceiveService extends Service {
     private ReceiveLink createLink() {
         if (prefs.getTransport() == Transport.BLUETOOTH) {
             String mac = prefs.getReceiveDeviceMac();
+            bluetoothTargetLabel = deviceLabel(mac);
             return new BluetoothNmeaClient(BluetoothAdapter.getDefaultAdapter(), mac,
-                    deviceLabel(mac), UUID.fromString(prefs.getUuid()), callback);
+                    bluetoothTargetLabel, UUID.fromString(prefs.getUuid()), callback);
         }
         return new NmeaClient(targetProvider, port, callback);
+    }
+
+    /**
+     * 当前流水线是按什么配置建的。
+     *
+     * 用来拦住**重复的启动请求**：界面切页会重建视图，重建后的分段控件可能
+     * 误触发一次启动；若这里不比对，就会把正在跑的连接拆掉重来，对端读到
+     * EOF 后反复断开重连。
+     */
+    private String currentConfig() {
+        if (prefs.getTransport() == Transport.BLUETOOTH) {
+            return "BT:" + prefs.getReceiveDeviceMac() + ":" + prefs.getUuid();
+        }
+        return "WIFI:" + port + ":" + host;
     }
 
     /** 设备名只用于展示；取不到就退回 MAC。 */
@@ -234,6 +263,25 @@ public class ReceiveService extends Service {
             // 权限或地址问题：退回 MAC 展示即可
         }
         return mac;
+    }
+
+    /**
+     * 「连接设备」与通知里显示的对方。
+     *
+     * 蓝牙是**设备名**（用户选的那台发送端），WiFi 是「地址:端口」。
+     * 不能直接拼 `host + ":" + port`——蓝牙模式下 host 是空的，会显示成
+     * 没有意义的「:10110」。
+     */
+    private String targetLabel() {
+        if (prefs.getTransport() == Transport.BLUETOOTH) {
+            return bluetoothTargetLabel;
+        }
+        ReceiveLink current = client;
+        String address = current == null ? host : current.currentTarget();
+        if (address == null || address.isEmpty()) {
+            address = host;
+        }
+        return address == null || address.isEmpty() ? "" : address + ":" + port;
     }
 
     /** 启动时的状态文案，按传输方式取词。 */
@@ -267,8 +315,8 @@ public class ReceiveService extends Service {
             state.setBt(connected ? TransmitterState.Bt.CONNECTED : TransmitterState.Bt.WAITING);
             state.setStatusText(message);
             if (connected) {
-                state.addPeer(new Peer(host + ":" + port, host + ":" + port,
-                        System.currentTimeMillis()));
+                String label = targetLabel();
+                state.addPeer(new Peer(label, label, System.currentTimeMillis()));
             } else {
                 state.setPeers(null);
             }
@@ -383,6 +431,7 @@ public class ReceiveService extends Service {
         }
         stopped = true;
         running = false;
+        runningConfig = "";
         stopExisting();
         state.resetForStop();
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
