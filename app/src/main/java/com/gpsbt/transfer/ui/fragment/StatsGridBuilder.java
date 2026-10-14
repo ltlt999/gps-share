@@ -22,6 +22,7 @@ final class StatsGridBuilder {
     static final String KEY_SENTENCES = "sentences";
     static final String KEY_RATE = "rate";
     static final String KEY_DEVICE = "device";
+    static final String KEY_UPTIME = "uptime";
 
     private StatsGridBuilder() {
     }
@@ -49,6 +50,8 @@ final class StatsGridBuilder {
         add(grid, target, KEY_SENTENCES, R.string.stat_sentences, R.drawable.ic_stat_send, "0");
         add(grid, target, KEY_RATE, R.string.stat_rate, R.drawable.ic_stat_speed, "0");
         add(grid, target, KEY_DEVICE, R.string.stat_device, R.drawable.ic_stat_bluetooth,
+                R.string.value_unknown);
+        add(grid, target, KEY_UPTIME, R.string.stat_uptime, R.drawable.ic_stat_uptime,
                 R.string.value_unknown);
     }
 

@@ -55,6 +55,7 @@ public class HomeFragment extends Fragment
     private Prefs prefs;
 
     private PulseButtonView pulseButton;
+    private TextView homeSubtitle;
     private TextView statusBadge;
     private TextView statusText;
     private MaterialButtonToggleGroup roleGroup;
@@ -113,6 +114,7 @@ public class HomeFragment extends Fragment
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         pulseButton = view.findViewById(R.id.pulse_button);
+        homeSubtitle = view.findViewById(R.id.home_subtitle);
         statusBadge = view.findViewById(R.id.status_badge);
         statusText = view.findViewById(R.id.status_text);
         roleGroup = view.findViewById(R.id.role_group);
@@ -581,6 +583,7 @@ public class HomeFragment extends Fragment
                 String.valueOf(running ? snapshot.stats().sentences : 0));
         set(StatsGridBuilder.KEY_RATE, String.format(Locale.US, "%.1f %s",
                 running ? snapshot.stats().rateHz : 0d, getString(R.string.unit_rate)));
+        set(StatsGridBuilder.KEY_UPTIME, uptimeText(snapshot));
         List<Peer> peers = snapshot.peers();
         if (peers.isEmpty()) {
             set(StatsGridBuilder.KEY_DEVICE, unknown);
@@ -605,6 +608,19 @@ public class HomeFragment extends Fragment
         boolean receive = prefs.getRole() == Role.RECEIVE;
         boolean wifi = prefs.getTransport() == Transport.WIFI;
         boolean client = prefs.getMode() == ConnectionMode.CLIENT;
+
+        renderSubtitle(receive, wifi);
+        // 接收端不发送，硬套「已发送语句 / 发送速率」只会显示 0，反而让人
+        // 以为出了问题。这里按角色改标题，并隐藏用不上的速率卡。
+        StatCardView sentencesCard = cards.get(StatsGridBuilder.KEY_SENTENCES);
+        if (sentencesCard != null) {
+            sentencesCard.setTitle(getString(receive
+                    ? R.string.stat_received : R.string.stat_sentences));
+        }
+        StatCardView rateCard = cards.get(StatsGridBuilder.KEY_RATE);
+        if (rateCard != null) {
+            rateCard.setVisibility(receive ? View.GONE : View.VISIBLE);
+        }
 
         // 传输方式对两个角色都有意义：共享端用它选发出去的方式，
         // 接收端用它选收进来的方式
@@ -646,6 +662,31 @@ public class HomeFragment extends Fragment
                         ? R.string.home_mode_client_hint : R.string.home_mode_server_hint);
             }
         }
+    }
+
+    /** 顶部小字随角色与传输方式变化——写死「蓝牙串口输出」在 WiFi 模式下是错的。 */
+    private void renderSubtitle(boolean receive, boolean wifi) {
+        int res;
+        if (receive) {
+            res = wifi ? R.string.home_subtitle_receive_wifi : R.string.home_subtitle_receive_bt;
+        } else {
+            res = wifi ? R.string.home_subtitle_share_wifi : R.string.home_subtitle_share_bt;
+        }
+        homeSubtitle.setText(res);
+    }
+
+    /**
+     * 「在线时长」：自本次连接建立起的时长。
+     *
+     * 一直稳定增长说明链路好；**反复归零说明在掉线重连**——比翻日志直观。
+     * 未连接时显示 `--`（stats.startedAt 为 0）。
+     */
+    private String uptimeText(TransmitterState snapshot) {
+        long startedAt = snapshot.stats().startedAt;
+        if (snapshot.phase() != TransmitterState.Phase.RUNNING || startedAt <= 0) {
+            return getString(R.string.value_unknown);
+        }
+        return Formatters.duration(System.currentTimeMillis() - startedAt);
     }
 
     /** 只有接收角色才需要监听服务发现；重复调用安全。 */

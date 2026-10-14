@@ -31,6 +31,7 @@
                     android:text="@string/home_title" />
 
                 <TextView
+                    android:id="@+id/home_subtitle"
                     style="@style/TextAppearance.GpsBt.Body"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

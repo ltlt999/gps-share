@@ -31,6 +31,7 @@ import com.gpsbt.transfer.rx.MockLocationInjector;
 import com.gpsbt.transfer.rx.NmeaClient;
 import com.gpsbt.transfer.rx.ReceiveLink;
 import com.gpsbt.transfer.state.LogBus;
+import com.gpsbt.transfer.state.TransmitStats;
 import com.gpsbt.transfer.state.TransmitterState;
 import com.gpsbt.transfer.ui.view.SatelliteRadarView;
 import com.gpsbt.transfer.util.Formatters;
@@ -40,7 +41,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
 /**
  * 接收端前台服务：连发送端 → 解析 NMEA → 注入系统定位。
  *
@@ -65,13 +65,11 @@ public class ReceiveService extends Service {
 
     private Prefs prefs;
     private TransmitterState state;
+    private TransmitStats stats;
     private ReceiveLink client;
     private MockLocationInjector injector;
     private String host;
     private int port;
-    private long startedAt;
-    /** 已接收的定位条数，供通知展示。发送端用 TransmitStats，接收端自己数。 */
-    private volatile long received;
     /** 停止幂等守卫：stopSelfSafely 被多次调用时只真正执行一次。 */
     private boolean stopped;
     /** 当前流水线是按什么配置建的；用来判断重复的启动请求是否真的需要重启。 */
@@ -146,6 +144,10 @@ public class ReceiveService extends Service {
         instance = this;
         prefs = Prefs.get(this);
         state = TransmitterState.get();
+        // 接收端有自己的统计对象：之前不设的话，运行数据里显示的是上一次
+        // 发送会话留下的陈旧数字（setStats 原本只在发送端调过）
+        stats = new TransmitStats();
+        state.setStats(stats);
         createChannel();
     }
 
@@ -186,7 +188,6 @@ public class ReceiveService extends Service {
         stopped = false;
         running = true;
         runningConfig = config;
-        startedAt = System.currentTimeMillis();
         state.setPhase(TransmitterState.Phase.RUNNING);
         state.setStatusText(initialStatus());
 
@@ -319,15 +320,20 @@ public class ReceiveService extends Service {
             if (connected) {
                 String label = targetLabel();
                 state.addPeer(new Peer(label, label, System.currentTimeMillis()));
+                // 「在线时长」从本次连接建立起算
+                if (stats.startedAt == 0) {
+                    stats.startedAt = System.currentTimeMillis();
+                }
             } else {
                 state.setPeers(null);
+                stats.startedAt = 0L;
             }
             refreshNotification();
         }
 
         @Override
         public void onLocation(NmeaInput location) {
-            received++;
+            stats.sentences++;
             if (injector != null) {
                 injector.inject(location);
             }
@@ -401,8 +407,9 @@ public class ReceiveService extends Service {
                     .append("　").append(Formatters.longitude(fix.longitude));
         }
         text.append("　").append(getString(R.string.receive_notif_stats,
-                received,
-                Formatters.duration(System.currentTimeMillis() - startedAt)));
+                stats.sentences,
+                Formatters.duration(stats.startedAt > 0
+                        ? System.currentTimeMillis() - stats.startedAt : -1L)));
 
         Intent open = new Intent(this, MainActivity.class);
         PendingIntent content = PendingIntent.getActivity(this, 0, open,

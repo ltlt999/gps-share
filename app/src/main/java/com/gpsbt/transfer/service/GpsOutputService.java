@@ -664,7 +664,11 @@ public class GpsOutputService extends Service {
         public void onPeerJoined(Peer peer) {
             state.addPeer(peer);
             state.setPendingDevice(null);
-            stats.startedAt = System.currentTimeMillis();
+            // 「在线时长」从**第一个**对端接入起算：多对端时后接入的
+            // 不应该把已经跑了一段的时间重置掉
+            if (stats.startedAt == 0) {
+                stats.startedAt = System.currentTimeMillis();
+            }
             LogBus.get().log(LogBus.Level.INFO,
                     linkLabel() + "已连接 " + peer.name + "（" + peer.address + "）");
             refreshNotification();
@@ -674,6 +678,10 @@ public class GpsOutputService extends Service {
         public void onPeerLeft(Peer peer, String reason) {
             LogBus.get().log(LogBus.Level.WARN, linkLabel() + "已断开：" + reason);
             state.removePeer(peer);
+            // 全部对端都走了才算「本次连接结束」，时长归零
+            if (state.peers().isEmpty()) {
+                stats.startedAt = 0L;
+            }
             if (mode == ConnectionMode.SERVER && prefs.getTransport() == Transport.BLUETOOTH) {
                 // 蓝牙单对端：清理死连接，accept 循环继续等待下一次连接
                 Link currentLink = link;

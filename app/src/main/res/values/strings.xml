@@ -11,6 +11,10 @@
     <!-- 主页 -->
     <string name="home_title">GPS共享</string>
     <string name="home_subtitle">NMEA 0183 蓝牙串口输出</string>
+    <string name="home_subtitle_share_bt">NMEA 0183 蓝牙串口输出</string>
+    <string name="home_subtitle_share_wifi">NMEA 0183 热点 TCP 输出</string>
+    <string name="home_subtitle_receive_bt">NMEA 0183 蓝牙接收</string>
+    <string name="home_subtitle_receive_wifi">NMEA 0183 热点 TCP 接收</string>
     <string name="home_mode_title">连接方式</string>
     <string name="home_mode_server">等待被连接</string>
     <string name="home_mode_client">主动连接</string>
@@ -59,6 +63,8 @@
     <string name="stat_sentences">已发送语句</string>
     <string name="stat_rate">发送速率</string>
     <string name="stat_device">连接设备</string>
+    <string name="stat_uptime">在线时长</string>
+    <string name="stat_received">已接收条数</string>
     <string name="value_peer_count">%1$d 台</string>
     <string name="notif_stats_duration">已连接 %1$s</string>
 
