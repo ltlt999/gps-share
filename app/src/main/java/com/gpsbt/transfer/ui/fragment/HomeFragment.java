@@ -31,6 +31,7 @@ import com.gpsbt.transfer.net.HotspotAddresses;
 import com.gpsbt.transfer.net.ServerTable;
 import com.gpsbt.transfer.service.GpsOutputService;
 import com.gpsbt.transfer.service.ReceiveService;
+import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.state.TransmitterState;
 import com.gpsbt.transfer.ui.adapter.PairedDeviceAdapter;
 import com.gpsbt.transfer.ui.adapter.PeerAdapter;
@@ -210,6 +211,7 @@ public class HomeFragment extends Fragment
                         Transport transport = checkedId == R.id.transport_wifi
                                 ? Transport.WIFI : Transport.BLUETOOTH;
                         prefs.setTransport(transport);
+                        restartRunningService();
                         renderPanels();
                     }
                 });
@@ -226,6 +228,7 @@ public class HomeFragment extends Fragment
                                 ? ConnectionMode.CLIENT : ConnectionMode.SERVER;
                         prefs.setMode(mode);
                         state.setMode(mode);
+                        restartRunningService();
                         renderPanels();
                     }
                 });
@@ -308,6 +311,31 @@ public class HomeFragment extends Fragment
     /** 两个服务任一在跑就算「在传输」。 */
     private boolean anyServiceRunning() {
         return GpsOutputService.isRunning() || ReceiveService.isRunning();
+    }
+
+    /**
+     * 传输方式 / 连接方式变了，若服务正在跑就按新配置重启流水线。
+     *
+     * 服务在启动那一刻就把传输方式读进了流水线，之后改设置**不会**自动生效：
+     * 不重启的话界面已经切到 WiFi，实际跑的仍是蓝牙，而 WiFi 端口根本没在
+     * 监听，接收端怎么都连不上，必须手动停一次再开。
+     *
+     * 服务自带「重复启动防护」——再发一次启动请求会先彻底清理旧流水线再重建，
+     * 所以这里直接调 start() 即可，不需要先 stop。
+     */
+    private void restartRunningService() {
+        Context app = getContext() == null ? null : getContext().getApplicationContext();
+        if (app == null) {
+            return;
+        }
+        if (GpsOutputService.isRunning()) {
+            LogBus.get().log(LogBus.Level.INFO, "配置已改，按新设置重启发送端");
+            GpsOutputService.start(app, prefs.getMode(), selectedMac);
+        }
+        if (ReceiveService.isRunning()) {
+            LogBus.get().log(LogBus.Level.INFO, "配置已改，按新设置重启接收端");
+            ReceiveService.start(app, prefs.getLastServerHost(), prefs.getLastServerPort());
+        }
     }
 
     /** 一次停干净两个服务。没在跑的不去动——去动会把没运行的服务重新拉起来。 */
