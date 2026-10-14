@@ -408,6 +408,10 @@ public class GpsOutputService extends Service {
             locationProvider = null;
         }
         stopScheduler();
+        // 旧链路的对端**不会**随 stop() 回调（有意如此：主动停止不该报「断线」），
+        // 但它们已经不在线了，必须显式清掉。否则切换传输方式后，旧对端会留在
+        // 「连接设备」里和新对端叠在一起——WiFi 1 台 + 蓝牙 1 台就显示成「2 台」。
+        state.setPeers(null);
     }
 
     /** 只建立（或重建）链路，不重置定位与调度——断线重连时复用。 */

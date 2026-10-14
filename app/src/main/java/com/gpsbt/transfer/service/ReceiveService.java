@@ -213,6 +213,8 @@ public class ReceiveService extends Service {
             injector.stop();
             injector = null;
         }
+        // 同发送端：旧链路的断开不会回调，显式清掉，避免「连接设备」残留
+        state.setPeers(null);
     }
 
     /**
