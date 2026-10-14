@@ -54,6 +54,7 @@ public final class Prefs {
     private static final String KEY_LAST_SERVER_PORT = "last_server_port";
     /** 接收端用蓝牙时要连的那台发送端；与发送端「主动连接」用的 KEY_LAST_MAC 分开存。 */
     private static final String KEY_RECEIVE_MAC = "receive_device_mac";
+    private static final String KEY_SATELLITE_ONLY_ACTIVE = "satellite_only_active";
 
     private static volatile Prefs instance;
     private final SharedPreferences prefs;
@@ -266,6 +267,20 @@ public final class Prefs {
 
     public void setReceiveDeviceMac(String value) {
         prefs.edit().putString(KEY_RECEIVE_MAC, value == null ? "" : value.trim()).apply();
+    }
+
+    /**
+     * 卫星明细是否只显示「有信号」的（在用 或 信噪比 &gt; 0）。
+     *
+     * 默认关：默认展示全部，让用户知道总共看到了多少颗；想只看有用的
+     * 再自己打开。
+     */
+    public boolean isSatelliteOnlyActive() {
+        return prefs.getBoolean(KEY_SATELLITE_ONLY_ACTIVE, false);
+    }
+
+    public void setSatelliteOnlyActive(boolean value) {
+        prefs.edit().putBoolean(KEY_SATELLITE_ONLY_ACTIVE, value).apply();
     }
 
     private static Set<String> defaultSentenceTokens() {

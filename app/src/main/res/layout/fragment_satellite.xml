@@ -18,11 +18,88 @@
         android:layout_height="260dp"
         android:layout_marginBottom="12dp" />
 
-    <TextView
-        style="@style/SectionTitle"
-        android:layout_width="wrap_content"
+    <!-- 标题 + 只看有信号的开关 -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/satellite_list_title" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/satellite_list_title"
+            style="@style/SectionTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/satellite_list_title" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_only_active"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="0dp"
+            android:text="@string/satellite_filter_active"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- 表头：列宽必须与 item_satellite.xml 保持一致，否则数值对不上标题 -->
+    <LinearLayout
+        android:id="@+id/satellite_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <TextView
+            style="@style/TextSecondary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.4"
+            android:text="@string/satellite_col_satellite"
+            android:textSize="11sp" />
+
+        <TextView
+            style="@style/TextSecondary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/satellite_col_elevation"
+            android:textSize="11sp" />
+
+        <TextView
+            style="@style/TextSecondary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/satellite_col_azimuth"
+            android:textSize="11sp" />
+
+        <TextView
+            style="@style/TextSecondary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/satellite_col_snr"
+            android:textSize="11sp" />
+
+        <TextView
+            style="@style/TextSecondary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/satellite_col_used"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="4dp"
+        android:background="@color/color_card_stroke" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/satellite_list"
@@ -37,4 +114,13 @@
         android:layout_height="wrap_content"
         android:text="@string/satellite_empty"
         android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/satellite_hint"
+        style="@style/TextSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/satellite_hint"
+        android:textSize="11sp" />
 </LinearLayout>

@@ -74,9 +74,15 @@
     <string name="satellite_title">卫星状态</string>
     <string name="satellite_radar_empty">等待卫星信号…</string>
     <string name="satellite_list_title">卫星明细</string>
+    <string name="satellite_list_title_count">卫星明细（%1$d / %2$d）</string>
+    <string name="satellite_col_satellite">卫星</string>
     <string name="satellite_col_prn">编号</string>
+    <string name="satellite_col_elevation">仰角</string>
+    <string name="satellite_col_azimuth">方位</string>
     <string name="satellite_col_snr">信噪比</string>
-    <string name="satellite_col_used">已用于定位</string>
+    <string name="satellite_col_used">用于定位</string>
+    <string name="satellite_filter_active">只看有信号的</string>
+    <string name="satellite_hint">仰角＝离地平线的高度，越接近 90° 越在头顶；方位＝从正北顺时针的角度；信噪比越高信号越好（0 表示还没搜到）。</string>
     <string name="satellite_yes">是</string>
     <string name="satellite_no">否</string>
     <string name="satellite_empty">暂无卫星数据</string>
