@@ -19,7 +19,7 @@ import java.util.List;
  *
  * 断线后每 5 秒自动重连（与发送端蓝牙客户端的重连节奏一致）。
  */
-public final class NmeaClient {
+public final class NmeaClient implements ReceiveLink {
 
     private static final Charset ASCII = Charset.forName("US-ASCII");
     private static final long RECONNECT_DELAY_MILLIS = 5000L;
@@ -34,15 +34,6 @@ public final class NmeaClient {
     private static final byte[] HEARTBEAT = "#GPSSHARE-HB\n".getBytes(ASCII);
     private static final long HEARTBEAT_INTERVAL_MILLIS = 5000L;
 
-    /** 回调一律在主线程。 */
-    public interface Callback {
-        /** 连上 / 断开（connected 为 false 时 message 说明原因）。 */
-        void onConnectionChanged(boolean connected, String message);
-
-        /** 解析出一条定位。 */
-        void onLocation(NmeaInput location);
-    }
-
     /**
      * 候选地址的来源。**每次尝试前都会重新问一次**——接收端可能比 WiFi
      * 先起来，那时网关还拿不到；等网络连上后再问就能拿到发送端地址了。
@@ -54,7 +45,7 @@ public final class NmeaClient {
 
     private final TargetProvider provider;
     private final int port;
-    private final Callback callback;
+    private final ReceiveLink.Callback callback;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final NmeaParser parser = new NmeaParser();
 
@@ -63,17 +54,19 @@ public final class NmeaClient {
     /** 当前正在尝试（或已连上）的地址，供界面展示。 */
     private volatile String currentHost = "";
 
-    public NmeaClient(TargetProvider provider, int port, Callback callback) {
+    public NmeaClient(TargetProvider provider, int port, ReceiveLink.Callback callback) {
         this.provider = provider;
         this.port = port;
         this.callback = callback;
     }
 
     /** 当前正在用（或正在尝试）的地址；还没开始尝试时为空串。 */
-    public String currentHost() {
+    @Override
+    public String currentTarget() {
         return currentHost;
     }
 
+    @Override
     public void start() {
         if (running) {
             return;
@@ -88,6 +81,7 @@ public final class NmeaClient {
     }
 
     /** 幂等。 */
+    @Override
     public void stop() {
         if (!running) {
             return;

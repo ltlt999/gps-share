@@ -1,27 +1,35 @@
 package com.gpsbt.transfer.service;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
+import androidx.core.content.ContextCompat;
 
 import com.gpsbt.transfer.MainActivity;
 import com.gpsbt.transfer.R;
+import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.engine.LocationProvider;
 import com.gpsbt.transfer.link.Peer;
+import com.gpsbt.transfer.link.Transport;
 import com.gpsbt.transfer.net.NetworkTargets;
 import com.gpsbt.transfer.nmea.NmeaInput;
+import com.gpsbt.transfer.rx.BluetoothNmeaClient;
 import com.gpsbt.transfer.rx.MockLocationInjector;
 import com.gpsbt.transfer.rx.NmeaClient;
+import com.gpsbt.transfer.rx.ReceiveLink;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.state.TransmitterState;
 import com.gpsbt.transfer.ui.view.SatelliteRadarView;
@@ -30,6 +38,7 @@ import com.gpsbt.transfer.util.Prefs;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
 /**
@@ -56,7 +65,7 @@ public class ReceiveService extends Service {
 
     private Prefs prefs;
     private TransmitterState state;
-    private NmeaClient client;
+    private ReceiveLink client;
     private MockLocationInjector injector;
     private String host;
     private int port;
@@ -107,8 +116,23 @@ public class ReceiveService extends Service {
         if (!LocationProvider.hasPermission(context)) {
             return context.getString(R.string.boot_reason_location);
         }
-        // 地址不再是硬性条件：拿不到时客户端会原地等，热点连上后靠
-        // 「默认网关」也能找到发送端
+        Prefs prefs = Prefs.get(context);
+        if (prefs.getTransport() == Transport.BLUETOOTH) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                    && ContextCompat.checkSelfPermission(context,
+                    Manifest.permission.BLUETOOTH_CONNECT)
+                    != PackageManager.PERMISSION_GRANTED) {
+                return context.getString(R.string.boot_reason_bluetooth_permission);
+            }
+            if (BluetoothAdapter.getDefaultAdapter() == null) {
+                return context.getString(R.string.boot_reason_no_bluetooth);
+            }
+            if (prefs.getReceiveDeviceMac().isEmpty()) {
+                return context.getString(R.string.receive_device_required);
+            }
+        }
+        // WiFi 下地址不再是硬性条件：拿不到时客户端会原地等，
+        // 热点连上后靠「默认网关」也能找到发送端
         return null;
     }
 
@@ -150,18 +174,17 @@ public class ReceiveService extends Service {
         running = true;
         startedAt = System.currentTimeMillis();
         state.setPhase(TransmitterState.Phase.RUNNING);
-        state.setStatusText(host.isEmpty()
-                ? "正在等待热点连接…" : "正在连接 " + host + ":" + port);
+        state.setStatusText(initialStatus());
 
         injector = new MockLocationInjector(this);
         if (!injector.start()) {
             state.setStatusText(getString(R.string.receive_mock_denied));
         } else {
-            state.setStatusText(host.isEmpty()
-                    ? "已就绪，正在等待热点连接…" : "已就绪，正在连接 " + host + ":" + port);
+            state.setStatusText(host.isEmpty() && prefs.getTransport() != Transport.BLUETOOTH
+                    ? "已就绪，正在等待热点连接…" : "已就绪，" + initialStatus());
         }
 
-        client = new NmeaClient(targetProvider, port, callback);
+        client = createLink();
         client.start();
         refreshNotification();
         return START_NOT_STICKY;
@@ -186,6 +209,42 @@ public class ReceiveService extends Service {
      * 是当前有效的。网络还没连上时两者都可能拿不到，这时客户端会原地等待，
      * 等 WiFi 连上后自然就能连上发送端。
      */
+    /**
+     * 按传输方式选通道：
+     * - WiFi → TCP，候选地址每次尝试前动态解析（记下的地址 + 默认网关）；
+     * - 蓝牙 → SPP，连到用户在界面上选定的已配对发送端。
+     */
+    private ReceiveLink createLink() {
+        if (prefs.getTransport() == Transport.BLUETOOTH) {
+            String mac = prefs.getReceiveDeviceMac();
+            return new BluetoothNmeaClient(BluetoothAdapter.getDefaultAdapter(), mac,
+                    deviceLabel(mac), UUID.fromString(prefs.getUuid()), callback);
+        }
+        return new NmeaClient(targetProvider, port, callback);
+    }
+
+    /** 设备名只用于展示；取不到就退回 MAC。 */
+    private String deviceLabel(String mac) {
+        try {
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            if (adapter != null) {
+                return BluetoothLinkManager.displayName(adapter.getRemoteDevice(mac));
+            }
+        } catch (RuntimeException ignored) {
+            // 权限或地址问题：退回 MAC 展示即可
+        }
+        return mac;
+    }
+
+    /** 启动时的状态文案，按传输方式取词。 */
+    private String initialStatus() {
+        if (prefs.getTransport() == Transport.BLUETOOTH) {
+            String mac = prefs.getReceiveDeviceMac();
+            return mac.isEmpty() ? "请先在下方选择发送端设备" : "正在连接 " + deviceLabel(mac);
+        }
+        return host.isEmpty() ? "正在等待热点连接…" : "正在连接 " + host + ":" + port;
+    }
+
     private final NmeaClient.TargetProvider targetProvider = new NmeaClient.TargetProvider() {
         @Override
         public List<String> targets() {
@@ -202,7 +261,7 @@ public class ReceiveService extends Service {
         }
     };
 
-    private final NmeaClient.Callback callback = new NmeaClient.Callback() {
+    private final ReceiveLink.Callback callback = new ReceiveLink.Callback() {
         @Override
         public void onConnectionChanged(boolean connected, String message) {
             state.setBt(connected ? TransmitterState.Bt.CONNECTED : TransmitterState.Bt.WAITING);
@@ -286,7 +345,7 @@ public class ReceiveService extends Service {
                 ? getString(R.string.receive_notif_receiving)
                 : getString(R.string.receive_notif_waiting);
         StringBuilder text = new StringBuilder();
-        text.append(host == null ? "" : host).append(":").append(port);
+        text.append(client == null ? "" : client.currentTarget());
         if (fix != null && fix.valid) {
             text.append("　").append(Formatters.latitude(fix.latitude))
                     .append("　").append(Formatters.longitude(fix.longitude));

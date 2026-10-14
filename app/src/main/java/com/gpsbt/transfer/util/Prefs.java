@@ -52,6 +52,8 @@ public final class Prefs {
     private static final String KEY_ROLE = "role";
     private static final String KEY_LAST_SERVER_HOST = "last_server_host";
     private static final String KEY_LAST_SERVER_PORT = "last_server_port";
+    /** 接收端用蓝牙时要连的那台发送端；与发送端「主动连接」用的 KEY_LAST_MAC 分开存。 */
+    private static final String KEY_RECEIVE_MAC = "receive_device_mac";
 
     private static volatile Prefs instance;
     private final SharedPreferences prefs;
@@ -254,6 +256,16 @@ public final class Prefs {
 
     public void setLastServerPort(int value) {
         prefs.edit().putInt(KEY_LAST_SERVER_PORT, clampInt(MIN_PORT, MAX_PORT, value)).apply();
+    }
+
+    /** 接收端用蓝牙时要连的发送端 MAC；没有则返回空串。 */
+    public String getReceiveDeviceMac() {
+        String mac = prefs.getString(KEY_RECEIVE_MAC, "");
+        return mac == null ? "" : mac.trim();
+    }
+
+    public void setReceiveDeviceMac(String value) {
+        prefs.edit().putString(KEY_RECEIVE_MAC, value == null ? "" : value.trim()).apply();
     }
 
     private static Set<String> defaultSentenceTokens() {

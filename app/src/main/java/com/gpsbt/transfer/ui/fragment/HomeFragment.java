@@ -66,6 +66,7 @@ public class HomeFragment extends Fragment
     private TextView serviceNameValue;
     private TextView uuidValue;
     private View devicePanel;
+    private TextView deviceTitle;
     private RecyclerView deviceList;
     private TextView deviceEmpty;
     private Button refreshDevices;
@@ -123,6 +124,7 @@ public class HomeFragment extends Fragment
         serviceNameValue = view.findViewById(R.id.service_name_value);
         uuidValue = view.findViewById(R.id.uuid_value);
         devicePanel = view.findViewById(R.id.device_panel);
+        deviceTitle = view.findViewById(R.id.device_title);
         deviceList = view.findViewById(R.id.device_list);
         deviceEmpty = view.findViewById(R.id.device_empty);
         refreshDevices = view.findViewById(R.id.refresh_devices);
@@ -189,6 +191,10 @@ public class HomeFragment extends Fragment
                         } else if (app != null && ReceiveService.isRunning()) {
                             ReceiveService.stop(app);
                         }
+                        // 两个角色各自记着自己的目标蓝牙设备，切角色要换过来
+                        selectedMac = role == Role.RECEIVE
+                                ? prefs.getReceiveDeviceMac() : prefs.getLastDeviceMac();
+                        deviceAdapter.setSelectedMac(selectedMac);
                         renderPanels();
                     }
                 });
@@ -238,7 +244,8 @@ public class HomeFragment extends Fragment
             }
         });
 
-        selectedMac = prefs.getLastDeviceMac();
+        selectedMac = prefs.getRole() == Role.RECEIVE
+                ? prefs.getReceiveDeviceMac() : prefs.getLastDeviceMac();
         loadDevices();
     }
 
@@ -267,7 +274,12 @@ public class HomeFragment extends Fragment
     @Override
     public void onSelected(BluetoothDevice device) {
         selectedMac = device.getAddress();
-        prefs.setLastDeviceMac(selectedMac);
+        // 两个角色各自记自己的目标设备，互不覆盖
+        if (prefs.getRole() == Role.RECEIVE) {
+            prefs.setReceiveDeviceMac(selectedMac);
+        } else {
+            prefs.setLastDeviceMac(selectedMac);
+        }
         deviceAdapter.setSelectedMac(selectedMac);
     }
 
@@ -336,8 +348,32 @@ public class HomeFragment extends Fragment
         }
     }
 
-    /** 接收角色：按输入框的地址连上发送端。 */
+    /** 接收角色：按当前传输方式连上发送端。 */
     private void onReceiveStart() {
+        final Context app = requireContext().getApplicationContext();
+
+        if (prefs.getTransport() == Transport.BLUETOOTH) {
+            if (selectedMac == null || selectedMac.isEmpty()) {
+                new MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.receive_bt_devices_title)
+                        .setMessage(R.string.receive_device_required)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
+                return;
+            }
+            prefs.setReceiveDeviceMac(selectedMac);
+            if (getActivity() instanceof HomeCallbacks) {
+                ((HomeCallbacks) getActivity()).requestStartPermissions(new Runnable() {
+                    @Override
+                    public void run() {
+                        // 蓝牙方式下 host/port 用不到，服务会按传输方式自己取
+                        ReceiveService.start(app, "", prefs.getLastServerPort());
+                    }
+                });
+            }
+            return;
+        }
+
         String host = inputHost.getText() == null ? "" : inputHost.getText().toString().trim();
         if (host.isEmpty()) {
             new MaterialAlertDialogBuilder(requireContext())
@@ -352,7 +388,6 @@ public class HomeFragment extends Fragment
         prefs.setLastServerPort(port);
         inputPort.setText(String.valueOf(port));
         // 模拟位置注入同样需要定位权限，因此走与发送端相同的授权入口
-        final Context app = requireContext().getApplicationContext();
         if (getActivity() instanceof HomeCallbacks) {
             ((HomeCallbacks) getActivity()).requestStartPermissions(new Runnable() {
                 @Override
@@ -506,28 +541,42 @@ public class HomeFragment extends Fragment
         boolean wifi = prefs.getTransport() == Transport.WIFI;
         boolean client = prefs.getMode() == ConnectionMode.CLIENT;
 
-        transportTitle.setVisibility(receive ? View.GONE : View.VISIBLE);
-        transportGroup.setVisibility(receive ? View.GONE : View.VISIBLE);
-        modeTitle.setVisibility(receive || wifi ? View.GONE : View.VISIBLE);
-        modeGroup.setVisibility(receive || wifi ? View.GONE : View.VISIBLE);
-        modeHint.setVisibility(receive || wifi ? View.GONE : View.VISIBLE);
+        // 传输方式对两个角色都有意义：共享端用它选发出去的方式，
+        // 接收端用它选收进来的方式
+        transportTitle.setVisibility(View.VISIBLE);
+        transportGroup.setVisibility(View.VISIBLE);
 
+        // 连接方式（服务端 / 客户端）只对「共享 + 蓝牙」有意义
+        boolean showMode = !receive && !wifi;
+        modeTitle.setVisibility(showMode ? View.VISIBLE : View.GONE);
+        modeGroup.setVisibility(showMode ? View.VISIBLE : View.GONE);
+        modeHint.setVisibility(showMode ? View.VISIBLE : View.GONE);
+
+        // 共享角色
         serviceCard.setVisibility(!receive && !wifi && !client ? View.VISIBLE : View.GONE);
-        devicePanel.setVisibility(!receive && !wifi && client ? View.VISIBLE : View.GONE);
         wifiCard.setVisibility(!receive && wifi ? View.VISIBLE : View.GONE);
         peerPanel.setVisibility(!receive && wifi ? View.VISIBLE : View.GONE);
 
-        mockCard.setVisibility(receive ? View.VISIBLE : View.GONE);
-        serverPanel.setVisibility(receive ? View.VISIBLE : View.GONE);
-        manualPanel.setVisibility(receive ? View.VISIBLE : View.GONE);
+        // 蓝牙设备选择面板：共享端「主动连接」要用，接收端蓝牙方式也要用
+        boolean showDevicePanel = !wifi && (receive || client);
+        devicePanel.setVisibility(showDevicePanel ? View.VISIBLE : View.GONE);
+        if (showDevicePanel) {
+            deviceTitle.setText(receive
+                    ? R.string.receive_bt_devices_title : R.string.home_devices_title);
+        }
 
-        if (receive) {
+        // 接收角色
+        mockCard.setVisibility(receive ? View.VISIBLE : View.GONE);
+        serverPanel.setVisibility(receive && wifi ? View.VISIBLE : View.GONE);
+        manualPanel.setVisibility(receive && wifi ? View.VISIBLE : View.GONE);
+
+        if (receive && wifi) {
             startDiscoveryListener();
         } else {
             stopDiscoveryListener();
-            if (wifi) {
+            if (!receive && wifi) {
                 renderWifiCard();
-            } else {
+            } else if (showMode) {
                 modeHint.setText(client
                         ? R.string.home_mode_client_hint : R.string.home_mode_server_hint);
             }

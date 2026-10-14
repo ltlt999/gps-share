@@ -174,5 +174,8 @@
     <string name="receive_mock_title">模拟位置授权</string>
     <string name="receive_mock_body">接收端需要把本应用设为「模拟位置信息应用」：\n\n设置 → 关于手机 → 连点「版本号」7 次开启开发者选项\n开发者选项 → 选择模拟位置信息应用 → 选「GPS共享」\n\n未授权时定位无法注入系统，导航 App 看不到位置。</string>
     <string name="receive_host_required">请先填写发送端地址</string>
+    <string name="receive_device_required">请先选择要连接的发送端设备</string>
+    <string name="receive_bt_devices_title">选择发送端设备</string>
+    <string name="receive_bt_hint">发送端手机需在「系统设置 → 蓝牙」中与本机配对，并选「等待被连接」方式开始传输。</string>
     <string name="receive_satellite_note">卫星数据来自接收到的 GSV 语句；系统层面注入不了卫星星图，导航 App 里的卫星数可能显示为 0。</string>
 </resources>
