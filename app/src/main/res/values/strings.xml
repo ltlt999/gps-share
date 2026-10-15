@@ -178,6 +178,8 @@
     <string name="license_expired_body">本软件需要配置才能继续使用。\n\n请到「设置 → 授权」查看本机设备码，发送到 ltlt999@users.noreply.github.com 换取校验码。</string>
     <string name="license_expired_ok">知道了</string>
     <string name="license_expired_go">去配置</string>
+    <string name="license_overlay_action">去配置</string>
+    <string name="license_overlay_hint">点这里打开「设置 → 授权」</string>
 
     <!-- 权限 -->
     <string name="perm_location_title">需要定位权限</string>

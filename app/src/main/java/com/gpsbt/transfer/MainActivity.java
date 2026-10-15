@@ -129,6 +129,14 @@ public class MainActivity extends AppCompatActivity implements HomeFragment.Home
     // ---------- 权限入口 ----------
 
     @Override
+    public void openSettings() {
+        BottomNavigationView nav = findViewById(R.id.bottom_nav);
+        if (nav.getSelectedItemId() != R.id.nav_settings) {
+            nav.setSelectedItemId(R.id.nav_settings);
+        }
+    }
+
+    @Override
     public void requestStartPermissions(Runnable onGranted) {
         pendingStart = onGranted;
 

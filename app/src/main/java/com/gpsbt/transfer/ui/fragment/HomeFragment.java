@@ -98,6 +98,8 @@ public class HomeFragment extends Fragment
     private String selectedMac;
     /** 当前数据卡片是按哪个角色建的；null 表示还没建（视图刚创建）。 */
     private Boolean builtRole;
+    /** 初始到期的整页遮罩。 */
+    private View licenseOverlay;
 
     @Nullable
     @Override
@@ -149,6 +151,21 @@ public class HomeFragment extends Fragment
         inputHost = view.findViewById(R.id.input_host);
         inputPort = view.findViewById(R.id.input_port);
         statsGrid = view.findViewById(R.id.stats_grid);
+        licenseOverlay = view.findViewById(R.id.license_overlay);
+        // 整块遮罩和里面的按钮都跳到设置页——授权卡片在那里
+        licenseOverlay.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openLicenseSettings();
+            }
+        });
+        view.findViewById(R.id.btn_overlay_activate).setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        openLicenseSettings();
+                    }
+                });
 
         // 数据卡片交给 renderPanels() → ensureGridForRole() 按当前角色建，
         // 这里不建，避免建两次
@@ -497,9 +514,19 @@ public class HomeFragment extends Fragment
         }
     }
 
-    /** Activity 需实现的权限入口。 */
+    /** 跳到设置页——初始到期的遮罩点一下就到这里。 */
+    private void openLicenseSettings() {
+        if (getActivity() instanceof HomeCallbacks) {
+            ((HomeCallbacks) getActivity()).openSettings();
+        }
+    }
+
+    /** Activity 需实现的入口。 */
     public interface HomeCallbacks {
         void requestStartPermissions(Runnable onGranted);
+
+        /** 切到底部导航的「设置」页。 */
+        void openSettings();
     }
 
     private void loadDevices() {
@@ -641,6 +668,11 @@ public class HomeFragment extends Fragment
     }
 
     private void renderPanels() {
+        // 初始到期的遮罩盖住整页：核心功能已经不可用，留个入口让用户去配置，
+        // 而不是让他对着一个按了没反应的按钮猜
+        licenseOverlay.setVisibility(
+                本地配置.isUsable(requireContext()) ? View.GONE : View.VISIBLE);
+
         boolean receive = prefs.getRole() == Role.RECEIVE;
         boolean wifi = prefs.getTransport() == Transport.WIFI;
         boolean client = prefs.getMode() == ConnectionMode.CLIENT;

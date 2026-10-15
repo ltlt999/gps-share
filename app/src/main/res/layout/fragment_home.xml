@@ -1,566 +1,625 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:layout_height="match_parent">
 
-    <LinearLayout
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
-        <!-- 顶部标题与状态徽标 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    style="@style/TextAppearance.GpsBt.Title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/home_title" />
-
-                <TextView
-                    android:id="@+id/home_subtitle"
-                    style="@style/TextAppearance.GpsBt.Body"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/home_subtitle" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/status_badge"
-                style="@style/TextSecondary"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/badge_background"
-                android:paddingLeft="12dp"
-                android:paddingRight="12dp"
-                android:paddingTop="6dp"
-                android:paddingBottom="6dp"
-                android:text="@string/state_idle"
-                android:textColor="@color/color_primary" />
-        </LinearLayout>
-
-        <!-- 主按钮：开机首屏即可见，无需滚动 -->
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp">
-
-            <com.gpsbt.transfer.ui.view.PulseButtonView
-                android:id="@+id/pulse_button"
-                android:layout_width="160dp"
-                android:layout_height="160dp"
-                android:layout_gravity="center_horizontal" />
-        </FrameLayout>
-
-        <TextView
-            android:id="@+id/status_text"
-            style="@style/TextSecondary"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="@string/state_idle"
-            android:textSize="13sp" />
-
-        <!-- 角色 -->
-        <TextView
-            style="@style/SectionTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/home_role_title" />
-
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/role_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/role_share"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/home_role_share"
-                android:textColor="@color/mode_button_text"
-                app:backgroundTint="@color/mode_button_bg"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/mode_button_stroke"
-                app:strokeWidth="1dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/role_receive"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/home_role_receive"
-                android:textColor="@color/mode_button_text"
-                app:backgroundTint="@color/mode_button_bg"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/mode_button_stroke"
-                app:strokeWidth="1dp" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <!-- 传输方式 -->
-        <TextView
-            android:id="@+id/transport_title"
-            style="@style/SectionTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/home_transport_title" />
-
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/transport_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/transport_bluetooth"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/home_transport_bluetooth"
-                android:textColor="@color/mode_button_text"
-                app:backgroundTint="@color/mode_button_bg"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/mode_button_stroke"
-                app:strokeWidth="1dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/transport_wifi"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/home_transport_wifi"
-                android:textColor="@color/mode_button_text"
-                app:backgroundTint="@color/mode_button_bg"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/mode_button_stroke"
-                app:strokeWidth="1dp" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <!-- 连接方式 -->
-        <TextView
-            android:id="@+id/mode_title"
-            style="@style/SectionTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/home_mode_title" />
-
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/mode_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/mode_server"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/home_mode_server"
-                android:textColor="@color/mode_button_text"
-                app:backgroundTint="@color/mode_button_bg"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/mode_button_stroke"
-                app:strokeWidth="1dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/mode_client"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/home_mode_client"
-                android:textColor="@color/mode_button_text"
-                app:backgroundTint="@color/mode_button_bg"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/mode_button_stroke"
-                app:strokeWidth="1dp" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <TextView
-            android:id="@+id/mode_hint"
-            style="@style/TextSecondary"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/home_mode_server_hint"
-            android:textSize="12sp" />
-
-        <!-- 服务信息（服务器模式） -->
-        <LinearLayout
-            android:id="@+id/service_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_background"
             android:orientation="vertical"
             android:padding="16dp">
 
-            <TextView
-                style="@style/SectionTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/home_service_title" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <TextView
-                    style="@style/TextSecondary"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/home_service_name" />
-
-                <TextView
-                    android:id="@+id/service_name_value"
-                    style="@style/ValueText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    style="@style/TextSecondary"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/home_service_uuid" />
-
-                <TextView
-                    android:id="@+id/uuid_value"
-                    style="@style/ValueText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="11sp" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 设备列表（客户端模式） -->
-        <LinearLayout
-            android:id="@+id/device_panel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_background"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-
+            <!-- 顶部标题与状态徽标 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/device_title"
-                    style="@style/SectionTitle"
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="@string/home_devices_title" />
+                    android:orientation="vertical">
 
-                <Button
-                    android:id="@+id/refresh_devices"
-                    style="?attr/materialButtonOutlinedStyle"
+                    <TextView
+                        style="@style/TextAppearance.GpsBt.Title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/home_title" />
+
+                    <TextView
+                        android:id="@+id/home_subtitle"
+                        style="@style/TextAppearance.GpsBt.Body"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/home_subtitle" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/status_badge"
+                    style="@style/TextSecondary"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="36dp"
-                    android:text="@string/home_devices_refresh"
+                    android:background="@drawable/badge_background"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
+                    android:text="@string/state_idle"
+                    android:textColor="@color/color_primary" />
+            </LinearLayout>
+
+            <!-- 主按钮：开机首屏即可见，无需滚动 -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp">
+
+                <com.gpsbt.transfer.ui.view.PulseButtonView
+                    android:id="@+id/pulse_button"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"
+                    android:layout_gravity="center_horizontal" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/status_text"
+                style="@style/TextSecondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/state_idle"
+                android:textSize="13sp" />
+
+            <!-- 角色 -->
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/home_role_title" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/role_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/role_share"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/home_role_share"
+                    android:textColor="@color/mode_button_text"
+                    app:backgroundTint="@color/mode_button_bg"
+                    app:cornerRadius="14dp"
+                    app:strokeColor="@color/mode_button_stroke"
+                    app:strokeWidth="1dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/role_receive"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/home_role_receive"
+                    android:textColor="@color/mode_button_text"
+                    app:backgroundTint="@color/mode_button_bg"
+                    app:cornerRadius="14dp"
+                    app:strokeColor="@color/mode_button_stroke"
+                    app:strokeWidth="1dp" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <!-- 传输方式 -->
+            <TextView
+                android:id="@+id/transport_title"
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/home_transport_title" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/transport_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/transport_bluetooth"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/home_transport_bluetooth"
+                    android:textColor="@color/mode_button_text"
+                    app:backgroundTint="@color/mode_button_bg"
+                    app:cornerRadius="14dp"
+                    app:strokeColor="@color/mode_button_stroke"
+                    app:strokeWidth="1dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/transport_wifi"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/home_transport_wifi"
+                    android:textColor="@color/mode_button_text"
+                    app:backgroundTint="@color/mode_button_bg"
+                    app:cornerRadius="14dp"
+                    app:strokeColor="@color/mode_button_stroke"
+                    app:strokeWidth="1dp" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <!-- 连接方式 -->
+            <TextView
+                android:id="@+id/mode_title"
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/home_mode_title" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/mode_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/mode_server"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/home_mode_server"
+                    android:textColor="@color/mode_button_text"
+                    app:backgroundTint="@color/mode_button_bg"
+                    app:cornerRadius="14dp"
+                    app:strokeColor="@color/mode_button_stroke"
+                    app:strokeWidth="1dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/mode_client"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/home_mode_client"
+                    android:textColor="@color/mode_button_text"
+                    app:backgroundTint="@color/mode_button_bg"
+                    app:cornerRadius="14dp"
+                    app:strokeColor="@color/mode_button_stroke"
+                    app:strokeWidth="1dp" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <TextView
+                android:id="@+id/mode_hint"
+                style="@style/TextSecondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/home_mode_server_hint"
+                android:textSize="12sp" />
+
+            <!-- 服务信息（服务器模式） -->
+            <LinearLayout
+                android:id="@+id/service_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    style="@style/SectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/home_service_title" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/TextSecondary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/home_service_name" />
+
+                    <TextView
+                        android:id="@+id/service_name_value"
+                        style="@style/ValueText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/TextSecondary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/home_service_uuid" />
+
+                    <TextView
+                        android:id="@+id/uuid_value"
+                        style="@style/ValueText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 设备列表（客户端模式） -->
+            <LinearLayout
+                android:id="@+id/device_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/device_title"
+                        style="@style/SectionTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/home_devices_title" />
+
+                    <Button
+                        android:id="@+id/refresh_devices"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="36dp"
+                        android:text="@string/home_devices_refresh"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/device_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:id="@+id/device_empty"
+                    style="@style/TextSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/home_devices_empty"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- 热点服务信息（WiFi 方式） -->
+            <LinearLayout
+                android:id="@+id/wifi_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/SectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/home_wifi_title" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/TextSecondary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/home_wifi_address" />
+
+                    <TextView
+                        android:id="@+id/wifi_address_value"
+                        style="@style/ValueText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/TextSecondary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/home_wifi_port" />
+
+                    <TextView
+                        android:id="@+id/wifi_port_value"
+                        style="@style/ValueText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/wifi_hint"
+                    style="@style/TextSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/home_wifi_hint"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <!-- 在线接收端（WiFi 方式） -->
+            <LinearLayout
+                android:id="@+id/peer_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/SectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/home_wifi_peers" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/peer_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/peer_empty"
+                    style="@style/TextSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/home_wifi_peers_empty"
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/device_list"
+            <!-- 模拟位置授权提示 -->
+            <LinearLayout
+                android:id="@+id/mock_card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/device_empty"
-                style="@style/TextSecondary"
+                <TextView
+                    style="@style/SectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/receive_mock_title" />
+
+                <TextView
+                    android:id="@+id/mock_body"
+                    style="@style/TextSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/receive_mock_body"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- 发现的发送端 -->
+            <LinearLayout
+                android:id="@+id/server_panel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/home_devices_empty"
-                android:textSize="12sp"
-                android:visibility="gone" />
-        </LinearLayout>
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
 
-        <!-- 热点服务信息（WiFi 方式） -->
-        <LinearLayout
-            android:id="@+id/wifi_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_background"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
+                <TextView
+                    style="@style/SectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/receive_servers_title" />
 
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/server_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/server_empty"
+                    style="@style/TextSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/receive_servers_empty"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- 手动连接 -->
+            <LinearLayout
+                android:id="@+id/manual_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/SectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/receive_manual_title" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:hint="@string/receive_host">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/input_host"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:textColor="@color/color_text_primary" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:hint="@string/receive_port">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/input_port"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:maxLines="1"
+                            android:textColor="@color/color_text_primary" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 运行数据 -->
             <TextView
                 style="@style/SectionTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/home_wifi_title" />
+                android:layout_marginTop="16dp"
+                android:text="@string/home_stats_title" />
 
-            <LinearLayout
+            <GridLayout
+                android:id="@+id/stats_grid"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <TextView
-                    style="@style/TextSecondary"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/home_wifi_address" />
-
-                <TextView
-                    android:id="@+id/wifi_address_value"
-                    style="@style/ValueText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    style="@style/TextSecondary"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/home_wifi_port" />
-
-                <TextView
-                    android:id="@+id/wifi_port_value"
-                    style="@style/ValueText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textSize="13sp" />
-            </LinearLayout>
+                android:columnCount="2" />
 
             <TextView
-                android:id="@+id/wifi_hint"
                 style="@style/TextSecondary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/home_wifi_hint"
+                android:layout_marginTop="16dp"
+                android:text="@string/home_note"
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- 在线接收端（WiFi 方式） -->
-        <LinearLayout
-            android:id="@+id/peer_panel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_background"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
+    </androidx.core.widget.NestedScrollView>
 
-            <TextView
-                style="@style/SectionTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/home_wifi_peers" />
+    <!-- 初始到期的遮罩：盖住整页，点一下跳到「设置 → 授权」。
+         放在 FrameLayout 里而不是滚动内容里，才能铺满整屏、不跟着滚。 -->
+    <LinearLayout
+        android:id="@+id/license_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E6000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/peer_list"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" />
+        <ImageView
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:contentDescription="@string/license_expired_title"
+            android:src="@drawable/ic_stat_location"
+            app:tint="@color/color_warning" />
 
-            <TextView
-                android:id="@+id/peer_empty"
-                style="@style/TextSecondary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="@string/home_wifi_peers_empty"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <!-- 模拟位置授权提示 -->
-        <LinearLayout
-            android:id="@+id/mock_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_background"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-
-            <TextView
-                style="@style/SectionTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/receive_mock_title" />
-
-            <TextView
-                android:id="@+id/mock_body"
-                style="@style/TextSecondary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/receive_mock_body"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <!-- 发现的发送端 -->
-        <LinearLayout
-            android:id="@+id/server_panel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_background"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-
-            <TextView
-                style="@style/SectionTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/receive_servers_title" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/server_list"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" />
-
-            <TextView
-                android:id="@+id/server_empty"
-                style="@style/TextSecondary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="@string/receive_servers_empty"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <!-- 手动连接 -->
-        <LinearLayout
-            android:id="@+id/manual_panel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_background"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-
-            <TextView
-                style="@style/SectionTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/receive_manual_title" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="2"
-                    android:hint="@string/receive_host">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/input_host"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="text"
-                        android:maxLines="1"
-                        android:textColor="@color/color_text_primary" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:hint="@string/receive_port">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/input_port"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="number"
-                        android:maxLines="1"
-                        android:textColor="@color/color_text_primary" />
-                </com.google.android.material.textfield.TextInputLayout>
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 运行数据 -->
         <TextView
-            style="@style/SectionTitle"
+            style="@style/TextAppearance.GpsBt.Title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="@string/home_stats_title" />
-
-        <GridLayout
-            android:id="@+id/stats_grid"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:columnCount="2" />
+            android:text="@string/license_expired_title" />
 
         <TextView
             style="@style/TextSecondary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/home_note"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/license_expired_body"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_overlay_activate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/license_overlay_action" />
+
+        <TextView
+            style="@style/TextSecondary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/license_overlay_hint"
             android:textSize="11sp" />
     </LinearLayout>
-</androidx.core.widget.NestedScrollView>
+</FrameLayout>
