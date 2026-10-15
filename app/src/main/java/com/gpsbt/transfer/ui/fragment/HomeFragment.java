@@ -24,6 +24,7 @@ import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.bt.ConnectionMode;
 import com.gpsbt.transfer.link.Peer;
+import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.link.Role;
 import com.gpsbt.transfer.link.Transport;
 import com.gpsbt.transfer.net.DiscoveryListener;
@@ -328,6 +329,11 @@ public class HomeFragment extends Fragment
             stopAllServices();
             return;
         }
+        // 初始结束且未配置时拒绝启动，并告诉用户去哪儿配置
+        if (!本地配置.isUsable(requireContext())) {
+            showLicenseExpiredDialog();
+            return;
+        }
         if (prefs.getRole() == Role.RECEIVE) {
             onReceiveStart();
             return;
@@ -349,6 +355,15 @@ public class HomeFragment extends Fragment
                 ? R.id.transport_wifi : R.id.transport_bluetooth);
         modeGroup.check(prefs.getMode() == ConnectionMode.CLIENT
                 ? R.id.mode_client : R.id.mode_server);
+    }
+
+    /** 初始结束且未配置：说明去哪儿配置，而不是静默什么都不做。 */
+    private void showLicenseExpiredDialog() {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.license_expired_title)
+                .setMessage(R.string.license_expired_body)
+                .setPositiveButton(R.string.license_expired_ok, null)
+                .show();
     }
 
     /** 两个服务任一在跑就算「在传输」。 */

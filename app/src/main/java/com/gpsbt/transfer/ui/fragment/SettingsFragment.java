@@ -1,11 +1,15 @@
 package com.gpsbt.transfer.ui.fragment;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -15,6 +19,7 @@ import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.slider.Slider;
 import com.google.android.material.textfield.TextInputEditText;
 import com.gpsbt.transfer.R;
+import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.util.Prefs;
@@ -43,6 +48,9 @@ public class SettingsFragment extends Fragment {
     private Slider hdopSlider;
     private TextView hdopValue;
     private TextView about;
+    private TextView licenseDevice;
+    private TextView licenseState;
+    private TextInputEditText inputLicense;
     private TextInputEditText inputWifiPort;
     private MaterialSwitch swDiscovery;
     private TextInputEditText inputDiscoveryPort;
@@ -82,8 +90,27 @@ public class SettingsFragment extends Fragment {
         swDiscovery = view.findViewById(R.id.sw_discovery);
         inputDiscoveryPort = view.findViewById(R.id.input_discovery_port);
         about = view.findViewById(R.id.about_body);
+        licenseDevice = view.findViewById(R.id.license_device);
+        licenseState = view.findViewById(R.id.license_state);
+        inputLicense = view.findViewById(R.id.input_license);
 
         about.setText(getString(R.string.settings_about_body, versionName()));
+
+        licenseDevice.setText(本地配置.deviceCode(requireContext()));
+        renderLicenseState();
+
+        view.findViewById(R.id.btn_copy_device).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copyDeviceCode();
+            }
+        });
+        view.findViewById(R.id.btn_apply_license).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                applyLicense();
+            }
+        });
 
         swAutostart = view.findViewById(R.id.sw_autostart);
         swAutostart.setChecked(prefs.isAutoStartOnBoot());
@@ -262,6 +289,54 @@ public class SettingsFragment extends Fragment {
             result.add(NmeaSentenceType.VTG);
         }
         prefs.setSentences(result.isEmpty() ? NmeaSentenceType.all() : result);
+    }
+
+    /** 刷新授权状态那一行。 */
+    private void renderLicenseState() {
+        Context context = requireContext();
+        switch (本地配置.state(context)) {
+            case ACTIVE:
+                licenseState.setText(R.string.settings_license_active);
+                licenseState.setTextColor(
+                        getResources().getColor(R.color.color_primary, null));
+                break;
+            case TRIAL:
+                licenseState.setText(getString(R.string.settings_license_trial,
+                        本地配置.trialDaysLeft(context)));
+                licenseState.setTextColor(
+                        getResources().getColor(R.color.color_accent_blue, null));
+                break;
+            default:
+                licenseState.setText(R.string.settings_license_expired);
+                licenseState.setTextColor(getResources().getColor(R.color.color_error, null));
+                break;
+        }
+    }
+
+    /** 复制设备码：用户要把它发到作者邮箱换取校验码。 */
+    private void copyDeviceCode() {
+        ClipboardManager clipboard = (ClipboardManager)
+                requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("device-code",
+                    licenseDevice.getText()));
+        }
+        Toast.makeText(requireContext(), R.string.settings_license_copied,
+                Toast.LENGTH_LONG).show();
+    }
+
+    private void applyLicense() {
+        String code = inputLicense.getText() == null
+                ? "" : inputLicense.getText().toString();
+        if (本地配置.activate(requireContext(), code)) {
+            inputLicense.setText("");
+            renderLicenseState();
+            Toast.makeText(requireContext(), R.string.settings_license_ok,
+                    Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(requireContext(), R.string.settings_license_bad,
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     /** 从系统读取真实版本号（此前硬编码为 1.0.0，导致版本更新后界面不变）。 */

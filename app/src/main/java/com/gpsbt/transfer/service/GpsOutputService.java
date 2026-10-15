@@ -36,6 +36,7 @@ import com.gpsbt.transfer.net.NetLinkManager;
 import com.gpsbt.transfer.nmea.NmeaGenerator;
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
+import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.state.NmeaLog;
 import com.gpsbt.transfer.state.TransmitterState;
@@ -149,6 +150,10 @@ public class GpsOutputService extends Service {
     public static String prerequisiteFailure(Context context) {
         if (!LocationProvider.hasPermission(context)) {
             return context.getString(R.string.boot_reason_location);
+        }
+        // 授权把关放在服务层，界面、开机广播、看门狗都绕不过去
+        if (!本地配置.isUsable(context)) {
+            return context.getString(R.string.license_expired_title);
         }
         Prefs prefs = Prefs.get(context);
         // WiFi 通道不依赖蓝牙硬件与配对，跳过蓝牙相关的前置检查

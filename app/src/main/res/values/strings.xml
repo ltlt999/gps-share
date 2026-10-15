@@ -153,7 +153,31 @@
     <string name="settings_hdop_value">%.1f</string>
     <string name="settings_defaults">恢复默认</string>
     <string name="settings_about_title">关于</string>
-    <string name="settings_about_body">GPS共享 %1$s\n把本机 GPS 定位以标准 NMEA 0183 格式，通过蓝牙串口或 WiFi(TCP) 输出给其他设备；也可反过来当接收端，把别处共享来的定位注入本机系统。\n\n本软件默认不自动运行；如需自动开始传输，请在设置中开启「开机自动开始传输」（默认关闭）。开启后开机或打开本软件都会自动开始传输。停止传输后立即释放链路与 GPS 资源。</string>
+    <string name="settings_about_body">万物皆可买 · GPS共享 %1$s\n作者：万物皆可买\n邮箱：ltlt999@users.noreply.github.com\n\n把本机 GPS 定位以标准 NMEA 0183 格式，通过蓝牙串口或 WiFi(TCP) 输出给其他设备；也可反过来当接收端，把别处共享来的定位注入本机系统。\n\n本软件默认不自动运行；如需自动开始传输，请在设置中开启「开机自动开始传输」（默认关闭）。停止传输后立即释放链路与 GPS 资源。</string>
+
+    <!-- 品牌与授权 -->
+    <string name="brand_name">万物皆可买</string>
+    <string name="brand_email">ltlt999@users.noreply.github.com</string>
+    <string name="settings_contact_title">联系方式</string>
+    <string name="settings_author">作者</string>
+    <string name="settings_email">邮箱</string>
+    <string name="settings_license_title">授权</string>
+    <string name="settings_license_device">设备码</string>
+    <string name="settings_license_state">状态</string>
+    <string name="settings_license_trial">初始中（剩 %1$d 天）</string>
+    <string name="settings_license_active">已配置</string>
+    <string name="settings_license_expired">初始已结束，请配置</string>
+    <string name="settings_license_input">校验码</string>
+    <string name="settings_license_apply">配置</string>
+    <string name="settings_license_copy">复制设备码</string>
+    <string name="settings_license_copied">设备码已复制，请发送到 ltlt999@users.noreply.github.com 换取校验码</string>
+    <string name="settings_license_ok">配置成功，感谢支持！</string>
+    <string name="settings_license_bad">校验码无效。校验码与本机设备码绑定，请核对后再试</string>
+    <string name="settings_license_howto">把上面的设备码发到作者邮箱，会收到一串专属校验码；填进下面的输入框点「配置」即可。配置后永久有效，换设备需重新获取。</string>
+    <string name="license_expired_title">初始配置期已结束</string>
+    <string name="license_expired_body">本软件需要配置才能继续使用。\n\n请到「设置 → 授权」查看本机设备码，发送到 ltlt999@users.noreply.github.com 换取校验码。</string>
+    <string name="license_expired_ok">知道了</string>
+    <string name="license_expired_go">去配置</string>
 
     <!-- 权限 -->
     <string name="perm_location_title">需要定位权限</string>

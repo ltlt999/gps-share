@@ -56,6 +56,9 @@ public final class Prefs {
     private static final String KEY_RECEIVE_MAC = "receive_device_mac";
     private static final String KEY_SATELLITE_ONLY_ACTIVE = "satellite_only_active";
     private static final String KEY_SERVICE_WANTED = "service_wanted";
+    private static final String KEY_LICENSE_CODE = "license_code";
+    private static final String KEY_LICENSE_FIRST_RUN = "license_first_run";
+    private static final String KEY_LICENSE_LAST_SEEN = "license_last_seen";
 
     private static volatile Prefs instance;
     private final SharedPreferences prefs;
@@ -297,6 +300,36 @@ public final class Prefs {
 
     public void setServiceWanted(boolean value) {
         prefs.edit().putBoolean(KEY_SERVICE_WANTED, value).apply();
+    }
+
+    // ---------- 授权 ----------
+
+    /** 已保存的校验码（已规范化）；未配置返回空串。 */
+    public String getLicenseCode() {
+        String code = prefs.getString(KEY_LICENSE_CODE, "");
+        return code == null ? "" : code.trim();
+    }
+
+    public void setLicenseCode(String value) {
+        prefs.edit().putString(KEY_LICENSE_CODE, value == null ? "" : value.trim()).apply();
+    }
+
+    /** 首次运行时间（初始配置期起点）；从未记录过返回 0。 */
+    public long getLicenseFirstRun() {
+        return prefs.getLong(KEY_LICENSE_FIRST_RUN, 0L);
+    }
+
+    public void setLicenseFirstRun(long value) {
+        prefs.edit().putLong(KEY_LICENSE_FIRST_RUN, value).apply();
+    }
+
+    /** 见过的最大时间戳，用于防止把系统时间往回调来延长初始。 */
+    public long getLicenseLastSeen() {
+        return prefs.getLong(KEY_LICENSE_LAST_SEEN, 0L);
+    }
+
+    public void setLicenseLastSeen(long value) {
+        prefs.edit().putLong(KEY_LICENSE_LAST_SEEN, value).apply();
     }
 
     private static Set<String> defaultSentenceTokens() {
