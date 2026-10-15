@@ -90,6 +90,15 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 服务看门狗：定期检查「用户希望服务在跑但它已没了」，把它拉回来。
+             国产 ROM 常直接冻结进程并拦截 START_STICKY 重启，只有 JobScheduler
+             这种系统级调度还能把应用唤醒——没有它，服务一旦被回收就再也不会
+             自己起来，表现为「必须手动打开一次应用」。 -->
+        <service
+            android:name=".boot.ServiceWatchdog"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <!-- 开机自启：不启用 direct boot，解锁后才接收广播；是否自动传输由设置开关决定。
              额外监听 QUICKBOOT_POWERON，部分车机与"快速启动"设备投递的是这个 action。 -->
         <receiver

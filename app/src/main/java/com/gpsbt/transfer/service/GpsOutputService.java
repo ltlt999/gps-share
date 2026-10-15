@@ -22,6 +22,7 @@ import android.Manifest;
 
 import com.gpsbt.transfer.MainActivity;
 import com.gpsbt.transfer.boot.BootNotifier;
+import com.gpsbt.transfer.boot.ServiceWatchdog;
 import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.bt.ConnectionMode;
@@ -209,20 +210,33 @@ public class GpsOutputService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null || !ACTION_START.equals(intent.getAction())) {
+        boolean systemRestart = intent == null;
+        if (!systemRestart && !ACTION_START.equals(intent.getAction())) {
             LogBus.get().log(LogBus.Level.INFO, "用户停止传输");
-            stopSelfSafely();
+            stopSelfSafely(true);
             return START_NOT_STICKY;
         }
 
-        try {
-            mode = ConnectionMode.valueOf(intent.getStringExtra(EXTRA_MODE));
-        } catch (RuntimeException e) {
-            mode = ConnectionMode.SERVER;
+        if (systemRestart) {
+            // START_STICKY：系统回收进程后把服务拉起来，此时没有 Intent。
+            // 按设置里记着的配置原地恢复；并按「后台启动」处理——Android 12+
+            // 后台启动的前台服务读不到定位，服务会推一条「需要手动开始传输」
+            // 的通知让用户点一次，而不是静默空转。
+            LogBus.get().log(LogBus.Level.INFO, "发送服务被系统回收，按上次配置自动恢复");
+            mode = prefs.getMode();
+            deviceMac = prefs.getLastDeviceMac();
+            fromBoot = true;
+            uiStarted = false;
+        } else {
+            try {
+                mode = ConnectionMode.valueOf(intent.getStringExtra(EXTRA_MODE));
+            } catch (RuntimeException e) {
+                mode = ConnectionMode.SERVER;
+            }
+            deviceMac = intent.getStringExtra(EXTRA_DEVICE_MAC);
+            fromBoot = intent.getBooleanExtra(EXTRA_FROM_BOOT, false);
+            uiStarted = intent.getBooleanExtra(EXTRA_FROM_UI, false);
         }
-        deviceMac = intent.getStringExtra(EXTRA_DEVICE_MAC);
-        fromBoot = intent.getBooleanExtra(EXTRA_FROM_BOOT, false);
-        uiStarted = intent.getBooleanExtra(EXTRA_FROM_UI, false);
 
         // 必须在前台化之前检查：Android 14+ 缺定位权限就启动 location 型前台服务会抛
         // SecurityException。调用方（开机广播 / 界面兜底）已先检查过，这里是第二道防线
@@ -258,11 +272,19 @@ public class GpsOutputService extends Service {
         runningConfig = config;
 
         if (!startPipeline()) {
-            stopSelfSafely();
+            stopSelfSafely(false);
             return START_NOT_STICKY;
         }
-        // 关键约定：禁用"被杀后自动重启"
-        return START_NOT_STICKY;
+
+        // 记住「用户希望它跑」，并安排看门狗。
+        // 服务被系统回收后：START_STICKY 让系统重启它；万一 ROM 拦截了重启，
+        // 看门狗兜底。两者都不依赖用户去打开界面。
+        prefs.setServiceWanted(true);
+        ServiceWatchdog.schedule(this);
+        // STICKY：进程被杀后系统会带着 null Intent 把它拉回来（见上面的 systemRestart 分支）。
+        // 用户主动停止走的是 stopSelfSafely(true) + stopSelf()，不会被重启，
+        // 所以「默认不自动运行」这条约定依然成立。
+        return START_STICKY;
     }
 
     private boolean startPipeline() {
@@ -323,7 +345,7 @@ public class GpsOutputService extends Service {
                 if (adapter.isEnabled()) {
                     waiter.shutdownNow();
                     if (!startTransmission(adapter)) {
-                        stopSelfSafely();
+                        stopSelfSafely(false);
                     }
                     return;
                 }
@@ -332,7 +354,7 @@ public class GpsOutputService extends Service {
                     LogBus.get().log(LogBus.Level.WARN, "开机自动传输未启动：蓝牙未开启");
                     BootNotifier.notifyBlocked(GpsOutputService.this,
                             getString(R.string.boot_reason_bluetooth_off));
-                    stopSelfSafely();
+                    stopSelfSafely(false);
                 }
             }
         }, 2, 2, java.util.concurrent.TimeUnit.SECONDS);
@@ -490,7 +512,7 @@ public class GpsOutputService extends Service {
                 }
                 if (prefs.getTransport() == Transport.WIFI) {
                     if (!connectLink(null)) {
-                        stopSelfSafely();
+                        stopSelfSafely(false);
                     }
                     return;
                 }
@@ -502,7 +524,7 @@ public class GpsOutputService extends Service {
                     return;
                 }
                 if (!connectLink(adapter)) {
-                    stopSelfSafely();
+                    stopSelfSafely(false);
                 }
             }
         }, 5, TimeUnit.SECONDS);
@@ -548,7 +570,7 @@ public class GpsOutputService extends Service {
         if (bgBlocked && !fixReceived && now - startedAt > BG_FIX_TIMEOUT_MS) {
             LogBus.get().log(LogBus.Level.WARN, "后台启动的服务无法获取定位，降级为一键开始");
             notifyLocationRestricted();
-            stopSelfSafely();
+            stopSelfSafely(false);
             return;
         }
         final TransmitEngine current = engine;
@@ -659,7 +681,7 @@ public class GpsOutputService extends Service {
             LogBus.get().log(mapLevel(linkState), linkLabel() + "：" + message);
             if (linkState == Link.State.FAILED) {
                 // 监听建立失败属于致命错误（权限/蓝牙不可用），停止服务
-                stopSelfSafely();
+                stopSelfSafely(false);
                 return;
             }
             refreshNotification();
@@ -872,7 +894,18 @@ public class GpsOutputService extends Service {
         refreshNotification();
     }
 
-    private synchronized void stopSelfSafely() {
+    /**
+     * 停止服务。
+     *
+     * @param userRequested true 表示用户主动停止（按钮 / 通知）——此时才清掉
+     *                      「希望运行」标记并取消看门狗；系统回收导致的销毁传
+     *                      false，标记要留着，看门狗下次才敢把它拉回来
+     */
+    private synchronized void stopSelfSafely(boolean userRequested) {
+        if (userRequested) {
+            prefs.setServiceWanted(false);
+            ServiceWatchdog.cancel(this);
+        }
         running = false;
         runningConfig = "";
         stopRelink();
@@ -894,7 +927,8 @@ public class GpsOutputService extends Service {
 
     @Override
     public void onDestroy() {
-        stopSelfSafely();
+        // 系统回收（不是用户停止）：不清「希望运行」标记
+        stopSelfSafely(false);
         super.onDestroy();
     }
 

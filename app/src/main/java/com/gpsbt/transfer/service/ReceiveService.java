@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat;
 
 import com.gpsbt.transfer.MainActivity;
 import com.gpsbt.transfer.R;
+import com.gpsbt.transfer.boot.ServiceWatchdog;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.engine.LocationProvider;
 import com.gpsbt.transfer.link.Peer;
@@ -109,7 +110,7 @@ public class ReceiveService extends Service {
             LogBus.get().log(LogBus.Level.INFO, "接收本就未在运行，无需停止");
             return;
         }
-        local.stopSelfSafely();
+        local.stopSelfSafely(true);
     }
 
     /**
@@ -156,17 +157,27 @@ public class ReceiveService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null || !ACTION_START.equals(intent.getAction())) {
+        boolean systemRestart = intent == null;
+        if (!systemRestart && !ACTION_START.equals(intent.getAction())) {
             LogBus.get().log(LogBus.Level.INFO, "用户停止接收");
-            stopSelfSafely();
+            stopSelfSafely(true);
             return START_NOT_STICKY;
         }
-        host = intent.getStringExtra(EXTRA_HOST);
-        if (host == null) {
-            host = "";
+        if (systemRestart) {
+            // START_STICKY：系统回收进程后把服务拉起来，此时没有 Intent。
+            // **绝不能当成「用户停止」**——按设置里记着的配置原地恢复，
+            // 否则服务被回收后就再也起不来了（表现为「必须打开一次应用」）。
+            LogBus.get().log(LogBus.Level.INFO, "接收服务被系统回收，按上次配置自动恢复");
+            host = prefs.getLastServerHost();
+            port = prefs.getLastServerPort();
+        } else {
+            host = intent.getStringExtra(EXTRA_HOST);
+            if (host == null) {
+                host = "";
+            }
+            host = host.trim();
+            port = intent.getIntExtra(EXTRA_PORT, prefs.getLastServerPort());
         }
-        host = host.trim();
-        port = intent.getIntExtra(EXTRA_PORT, prefs.getLastServerPort());
 
         // 幂等：已在按同一配置运行就什么都不做，绝不把正在跑的连接拆掉重来。
         // 这一层守卫放在服务里（而不是只靠界面不误触发），因为配置的真相在
@@ -205,7 +216,15 @@ public class ReceiveService extends Service {
         client = createLink();
         client.start();
         refreshNotification();
-        return START_NOT_STICKY;
+
+        // 记住「用户希望它跑」，并安排看门狗。
+        // 服务被系统回收后：START_STICKY 让系统重启它；万一 ROM 拦截了重启，
+        // 看门狗兜底。两者都不依赖用户去打开界面。
+        prefs.setServiceWanted(true);
+        ServiceWatchdog.schedule(this);
+        // STICKY：进程被杀后系统会带着 null Intent 把它拉回来（见上面 systemRestart 分支）。
+        // 用户主动停止走的是 stopSelfSafely(true) + stopSelf()，不会被重启。
+        return START_STICKY;
     }
 
     private void stopExisting() {
@@ -471,11 +490,22 @@ public class ReceiveService extends Service {
     }
 
     /** 幂等：重复调用只真正执行一次，避免二次停止时把状态又写脏。 */
-    private synchronized void stopSelfSafely() {
+    /**
+     * 停止服务。
+     *
+     * @param userRequested true 表示用户主动停止（按钮 / 通知）——此时才清掉
+     *                      「希望运行」标记并取消看门狗；系统回收导致的销毁传
+     *                      false，标记要留着，看门狗下次才敢把它拉回来
+     */
+    private synchronized void stopSelfSafely(boolean userRequested) {
         if (stopped) {
             return;
         }
         stopped = true;
+        if (userRequested) {
+            prefs.setServiceWanted(false);
+            ServiceWatchdog.cancel(this);
+        }
         running = false;
         runningConfig = "";
         stopExisting();
@@ -486,7 +516,9 @@ public class ReceiveService extends Service {
 
     @Override
     public void onDestroy() {
-        stopSelfSafely();
+        // 系统回收（不是用户停止）：不清「希望运行」标记，
+        // 否则看门狗会以为用户停了，永远不会把它拉回来
+        stopSelfSafely(false);
         if (instance == this) {
             instance = null;
         }

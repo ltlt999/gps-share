@@ -55,6 +55,7 @@ public final class Prefs {
     /** 接收端用蓝牙时要连的那台发送端；与发送端「主动连接」用的 KEY_LAST_MAC 分开存。 */
     private static final String KEY_RECEIVE_MAC = "receive_device_mac";
     private static final String KEY_SATELLITE_ONLY_ACTIVE = "satellite_only_active";
+    private static final String KEY_SERVICE_WANTED = "service_wanted";
 
     private static volatile Prefs instance;
     private final SharedPreferences prefs;
@@ -281,6 +282,21 @@ public final class Prefs {
 
     public void setSatelliteOnlyActive(boolean value) {
         prefs.edit().putBoolean(KEY_SATELLITE_ONLY_ACTIVE, value).apply();
+    }
+
+    /**
+     * 「用户希望服务在跑」的持久化标记。
+     *
+     * 与内存里的运行状态不同：它要跨进程存活。服务被系统回收、进程重建
+     * 之后，看门狗靠它判断「该不该把服务拉回来」——用户主动停止时会清掉，
+     * 因此不会出现「停了又被拉起来」。
+     */
+    public boolean isServiceWanted() {
+        return prefs.getBoolean(KEY_SERVICE_WANTED, false);
+    }
+
+    public void setServiceWanted(boolean value) {
+        prefs.edit().putBoolean(KEY_SERVICE_WANTED, value).apply();
     }
 
     private static Set<String> defaultSentenceTokens() {
