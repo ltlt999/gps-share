@@ -567,6 +567,14 @@ public class GpsOutputService extends Service {
 
     private void tickInternal() {
         long now = System.currentTimeMillis();
+        // 授权在**运行期间**也可能到期（初始配置期正好在今天结束）。只在启动时查
+        // 一次的话，一个跨过到期点的会话会一直跑下去，等于白送。
+        if (!prerequisiteSatisfied(this)) {
+            LogBus.get().log(LogBus.Level.WARN, "前置条件不满足，停止传输");
+            state.setStatusText(getString(R.string.license_expired_title));
+            stopSelfSafely(false);
+            return;
+        }
         // 只有"开机广播在后台启动 + Android 12+"才会拿不到定位（系统禁止后台启动的
         // 前台服务读定位）。界面启动属前台操作，不受此限制，因此不能超时停掉——
         // GPS 冷启动可能要几十秒到几分钟，等不到定位就停会误伤正常使用

@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat;
 
 import com.gpsbt.transfer.MainActivity;
 import com.gpsbt.transfer.R;
+import com.gpsbt.transfer.boot.BootNotifier;
 import com.gpsbt.transfer.boot.ServiceWatchdog;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.engine.LocationProvider;
@@ -182,6 +183,17 @@ public class ReceiveService extends Service {
             }
             host = host.trim();
             port = intent.getIntExtra(EXTRA_PORT, prefs.getLastServerPort());
+        }
+
+        // 第二道防线：调用方（界面 / 开机广播 / 看门狗）已先查过一遍，但服务
+        // 自己也要把关——授权到期、权限被撤销都可能发生在两次调用之间。
+        // 发送端一直有这一层，接收端之前漏了。
+        String blocked = prerequisiteFailure(this);
+        if (blocked != null) {
+            LogBus.get().log(LogBus.Level.ERROR, "接收无法启动：" + blocked);
+            BootNotifier.reportBlocked(this, blocked);
+            stopSelf();
+            return START_NOT_STICKY;
         }
 
         // 幂等：已在按同一配置运行就什么都不做，绝不把正在跑的连接拆掉重来。
@@ -393,6 +405,13 @@ public class ReceiveService extends Service {
 
         @Override
         public void onLocation(NmeaInput location) {
+            // 前置条件在运行期间也可能变化——只在启动时查一次的话，
+            // 跨过到期点的会话会一直跑下去
+            if (!prerequisiteSatisfied(ReceiveService.this)) {
+                LogBus.get().log(LogBus.Level.WARN, "前置条件不满足，停止接收");
+                stopSelfSafely(false);
+                return;
+            }
             stats.sentences++;
             updateReceiveRate(System.currentTimeMillis());
             if (injector != null) {
