@@ -494,5 +494,40 @@
                 android:text="@string/settings_license_howto"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <!-- 位置权限：Android 12 起分「精确 / 大致」两级，
+             只有大致位置时共享出去的坐标误差可达几百米，必须让人看见 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_background"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_location_perm_title" />
+
+            <TextView
+                android:id="@+id/location_perm_state"
+                style="@style/TextSecondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_request_precise"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_location_upgrade"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -4,6 +4,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.os.Bundle;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +25,7 @@ import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
 import com.gpsbt.transfer.state.LogBus;
+import com.gpsbt.transfer.util.LocationPermission;
 import com.gpsbt.transfer.util.Prefs;
 
 import java.util.EnumSet;
@@ -48,6 +52,9 @@ public class SettingsFragment extends Fragment {
     private Slider hdopSlider;
     private TextView hdopValue;
     private TextView about;
+    private TextView locationPermState;
+    private ActivityResultLauncher<String[]> preciseLocationLauncher;
+    private Button requestPrecise;
     private TextView licenseDevice;
     private TextView licenseState;
     private TextInputEditText inputLicense;
@@ -59,6 +66,10 @@ public class SettingsFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = Prefs.get(requireContext());
+        // 只请求 FINE 时，系统会弹「升级到精确位置」的提示
+        preciseLocationLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestMultiplePermissions(),
+                result -> renderLocationPermission());
     }
 
     @Nullable
@@ -90,6 +101,14 @@ public class SettingsFragment extends Fragment {
         swDiscovery = view.findViewById(R.id.sw_discovery);
         inputDiscoveryPort = view.findViewById(R.id.input_discovery_port);
         about = view.findViewById(R.id.about_body);
+        locationPermState = view.findViewById(R.id.location_perm_state);
+        requestPrecise = view.findViewById(R.id.btn_request_precise);
+        requestPrecise.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                preciseLocationLauncher.launch(LocationPermission.preciseRequest());
+            }
+        });
         licenseDevice = view.findViewById(R.id.license_device);
         licenseState = view.findViewById(R.id.license_state);
         inputLicense = view.findViewById(R.id.input_license);
@@ -289,6 +308,40 @@ public class SettingsFragment extends Fragment {
             result.add(NmeaSentenceType.VTG);
         }
         prefs.setSentences(result.isEmpty() ? NmeaSentenceType.all() : result);
+    }
+
+    /** 位置权限的精细状态：精确 / 大致 / 未授权，以及升级入口。 */
+    private void renderLocationPermission() {
+        if (locationPermState == null) {
+            return;
+        }
+        LocationPermission.State state = LocationPermission.state(requireContext());
+        switch (state) {
+            case PRECISE:
+                locationPermState.setText(R.string.settings_location_precise);
+                locationPermState.setTextColor(
+                        getResources().getColor(R.color.color_primary, null));
+                break;
+            case APPROXIMATE:
+                locationPermState.setText(R.string.settings_location_approximate);
+                locationPermState.setTextColor(
+                        getResources().getColor(R.color.color_warning, null));
+                break;
+            default:
+                locationPermState.setText(R.string.settings_location_denied);
+                locationPermState.setTextColor(
+                        getResources().getColor(R.color.color_error, null));
+                break;
+        }
+        requestPrecise.setVisibility(
+                state == LocationPermission.State.PRECISE ? View.GONE : View.VISIBLE);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 从系统设置里改完权限回到这里，状态要跟着更新
+        renderLocationPermission();
     }
 
     /** 刷新授权状态那一行。 */

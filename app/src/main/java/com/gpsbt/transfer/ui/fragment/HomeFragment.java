@@ -40,6 +40,7 @@ import com.gpsbt.transfer.ui.adapter.ServerAdapter;
 import com.gpsbt.transfer.ui.view.PulseButtonView;
 import com.gpsbt.transfer.ui.view.StatCardView;
 import com.gpsbt.transfer.util.Formatters;
+import com.gpsbt.transfer.util.LocationPermission;
 import com.gpsbt.transfer.util.Prefs;
 
 import java.util.ArrayList;
@@ -572,8 +573,15 @@ public class HomeFragment extends Fragment
         }
         statusBadge.setText(statusTextRes);
         statusBadge.setTextColor(getResources().getColorStateList(statusColor, null));
-        statusText.setText(snapshot.statusText().isEmpty()
-                ? getString(statusTextRes) : snapshot.statusText());
+        String status = snapshot.statusText().isEmpty()
+                ? getString(statusTextRes) : snapshot.statusText();
+        // 共享角色要读 GPS 往外发：只有「大致位置」时拿到的是基站推算的
+        // 粗位置，几百米误差，必须说出来——否则用户以为一切正常
+        if (prefs.getRole() == Role.SHARE
+                && !LocationPermission.isPrecise(requireContext())) {
+            status = status + "\n" + getString(R.string.home_location_approximate);
+        }
+        statusText.setText(status);
         boolean receiveRunning = ReceiveService.isRunning();
         pulseButton.setState(running || receiveRunning || GpsOutputService.isRunning()
                 ? PulseButtonView.State.RUNNING : PulseButtonView.State.IDLE);
