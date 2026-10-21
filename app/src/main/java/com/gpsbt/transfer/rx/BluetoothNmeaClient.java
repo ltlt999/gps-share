@@ -115,6 +115,7 @@ public final class BluetoothNmeaClient implements ReceiveLink {
                 continue;
             }
             String failure = null;
+            String crash = null;
             BluetoothSocket created = null;
             try {
                 // 不调 cancelDiscovery()：它需要 BLUETOOTH_SCAN 权限，而本应用
@@ -133,6 +134,14 @@ public final class BluetoothNmeaClient implements ReceiveLink {
                 failure = "缺少蓝牙连接权限";
             } catch (IOException e) {
                 failure = e.getMessage();
+            } catch (RuntimeException e) {
+                // 读流路径里任何没预料到的异常都不能把接收端带走：
+                // 它会一路逃出这个线程，重连循环再也不会跑 ——
+                // 界面还显示着「连接中」，实际早就没人收数据了，
+                // 而且没有任何报错，用户只能干瞪眼。
+                // 按「连接断开」处理：原地重连（不是设备地址的问题）。
+                LogBus.get().log(LogBus.Level.ERROR, "接收异常：" + e);
+                crash = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             } finally {
                 closeQuietly(created);
                 socket = null;
@@ -140,9 +149,11 @@ public final class BluetoothNmeaClient implements ReceiveLink {
             if (!running) {
                 return;
             }
-            postConnection(false, failure == null
-                    ? "连接已断开，5 秒后重连"
-                    : "连不上 " + label + "（" + failure + "），5 秒后重试");
+            postConnection(false, failure != null
+                    ? "连不上 " + label + "（" + failure + "），5 秒后重试"
+                    : (crash == null
+                            ? "连接已断开，5 秒后重连"
+                            : "接收异常（" + crash + "），5 秒后重连"));
             sleepQuietly(RECONNECT_DELAY_MILLIS);
         }
     }

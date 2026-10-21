@@ -126,6 +126,7 @@ public final class NmeaClient implements ReceiveLink {
             currentHost = target;
             Thread heartbeat = null;
             String failure = null;
+            String crash = null;
             try {
                 Socket created = new Socket();
                 created.connect(new InetSocketAddress(target, port), CONNECT_TIMEOUT_MILLIS);
@@ -136,6 +137,14 @@ public final class NmeaClient implements ReceiveLink {
                 readLoop(created);
             } catch (IOException e) {
                 failure = e.getMessage();
+            } catch (RuntimeException e) {
+                // 读流路径里任何没预料到的异常都不能把接收端带走：
+                // 它会一路逃出这个线程，重连循环再也不会跑 ——
+                // 界面还显示着「连接中」，实际早就没人收数据了，
+                // 而且没有任何报错，用户只能干瞪眼。
+                // 按「连接断开」处理：原地重连，不换地址（不是地址的问题）。
+                LogBus.get().log(LogBus.Level.ERROR, "接收异常：" + e);
+                crash = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             } finally {
                 if (heartbeat != null) {
                     heartbeat.interrupt();
@@ -150,9 +159,11 @@ public final class NmeaClient implements ReceiveLink {
                 // 「连上过又断开」不换——那多半是发送端在重启，原地重试就行。
                 index++;
             }
-            postConnection(false, failure == null
-                    ? "连接已断开，5 秒后重连"
-                    : "连不上 " + target + "（" + failure + "），5 秒后换地址重试");
+            postConnection(false, failure != null
+                    ? "连不上 " + target + "（" + failure + "），5 秒后换地址重试"
+                    : (crash == null
+                            ? "连接已断开，5 秒后重连"
+                            : "接收异常（" + crash + "），5 秒后重连"));
             sleepQuietly(RECONNECT_DELAY_MILLIS);
         }
     }
