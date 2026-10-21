@@ -105,7 +105,7 @@ public class HomeFragment extends Fragment
     private final Runnable tickerTask = new Runnable() {
         @Override
         public void run() {
-            refreshLatencyCard();
+            refreshLiveCards();
             ticker.postDelayed(this, 1000L);
         }
     };
@@ -751,21 +751,53 @@ public class HomeFragment extends Fragment
         }
         long sinceArrival = System.currentTimeMillis() - fix.fixAt;
         if (sinceArrival > STALE_AFTER_MS) {
-            return getString(R.string.stat_latency_stale,
-                    String.format(Locale.US, "%.0f", sinceArrival / 1000.0d));
+            return getString(R.string.stat_latency_stale, staleDuration(sinceArrival));
         }
         long age = fix.ageMillis >= 0L ? fix.ageMillis : sinceArrival;
         return getString(R.string.stat_latency_value,
                 String.format(Locale.US, "%.2f", age / 1000.0d));
     }
 
-    /** 每秒只更新「定位延迟」卡：其余卡片没有时效性，不必跟着重画。 */
-    private void refreshLatencyCard() {
+    /**
+     * 过期时长的说法。数值大到一定程度就换单位 —— 卡片是半宽的，
+     * 而数值卡没有省略号，「已过期 86400 秒」会被**硬裁掉**。
+     */
+    private String staleDuration(long millis) {
+        long seconds = millis / 1000L;
+        if (seconds < 60L) {
+            return getString(R.string.stat_duration_sec, seconds);
+        }
+        if (seconds < 3600L) {
+            return getString(R.string.stat_duration_min, seconds / 60L);
+        }
+        return getString(R.string.stat_duration_hour, seconds / 3600L);
+    }
+
+    /**
+     * 每秒刷新「定位延迟」与两个计数卡。
+     *
+     * <p>位置过期提示要能一直往上走，而界面平时只在收到新数据时才刷新 ——
+     * 数据断流时恰好没有刷新，过期秒数就永远停在那一帧上。
+     *
+     * <p>「已接收语句 / 已接收数据量」同理：发送端没有新定位时只发保活帧，
+     * 那时一个定位快照都不会发布，但链路上确实有数据在跑 ——
+     * 数字必须每秒动一下，否则用户会以为链路是假连接
+     * （而 README 里明确承诺「链路看着连着但这个数不动 = 假连接」）。
+     */
+    private void refreshLiveCards() {
         if (!isAdded()) {
             return;
         }
         boolean running = state.phase() == TransmitterState.Phase.RUNNING;
         set(StatsGridBuilder.KEY_LATENCY, latencyText(state.fix(), running));
+        set(StatsGridBuilder.KEY_SENTENCES,
+                String.valueOf(running ? state.stats().sentences : 0));
+        set(StatsGridBuilder.KEY_BYTES, Formatters.bytes(
+                running ? state.stats().bytes : 0L));
+        set(StatsGridBuilder.KEY_RATE, String.format(Locale.US, "%.1f %s",
+                running ? state.stats().rateHz : 0d,
+                getString(prefs.getRole() == Role.RECEIVE
+                        ? R.string.unit_rate_received : R.string.unit_rate)));
     }
 
     private void renderPanels() {

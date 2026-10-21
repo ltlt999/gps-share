@@ -89,11 +89,11 @@ public class ReceiveService extends Service {
     private String runningConfig = "";
     /** 蓝牙模式下要连的设备名（缓存，避免每次刷新通知都查一遍蓝牙）。 */
     private String bluetoothTargetLabel = "";
-    /** 接收速率的统计窗口：每秒算一次上一秒收到了多少条。 */
+    /** 接收速率的统计窗口：每秒算一次上一秒收到了多少个定位。 */
     private long rateWindowStart;
-    private long rateWindowSentences;
-    /** 上次结算过的累计字节数：用于按增量统计，避免同一帧被发布两次时重复累加。 */
-    private long countedWireBytes;
+    private long rateWindowPositions;
+    /** 上次刷新通知的时刻：进度上报时顺带刷新，但要限频。 */
+    private long lastNotificationAt;
 
     public static boolean isRunning() {
         return running;
@@ -269,8 +269,15 @@ public class ReceiveService extends Service {
         // 同发送端：旧链路的断开不会回调，显式清掉，避免「连接设备」残留
         state.setPeers(null);
         rateWindowStart = 0L;
-        rateWindowSentences = 0L;
+        rateWindowPositions = 0L;
         stats.rateHz = 0d;
+        // 计数归零：新链路从头数。接收端的计数口径是「本次接收会话累计」，
+        // 与发送端「本次发送会话累计」对称 —— 两边都从各自服务启动那刻开始数。
+        stats.sentences = 0L;
+        stats.bytes = 0L;
+        stats.frames = 0L;
+        // 「在线时长」也重新起算：新流水线 = 新的一次会话
+        stats.startedAt = 0L;
     }
 
     /**
@@ -282,14 +289,14 @@ public class ReceiveService extends Service {
     private void updateReceiveRate(long now) {
         if (rateWindowStart == 0L) {
             rateWindowStart = now;
-            rateWindowSentences = stats.frames;
+            rateWindowPositions = stats.frames;
             return;
         }
         long elapsed = now - rateWindowStart;
         if (elapsed >= 1000L) {
-            stats.rateHz = (stats.frames - rateWindowSentences) * 1000.0d / elapsed;
+            stats.rateHz = (stats.frames - rateWindowPositions) * 1000.0d / elapsed;
             rateWindowStart = now;
-            rateWindowSentences = stats.frames;
+            rateWindowPositions = stats.frames;
         }
     }
 
@@ -409,12 +416,9 @@ public class ReceiveService extends Service {
                 if (stats.startedAt == 0) {
                     stats.startedAt = System.currentTimeMillis();
                 }
-                // 重连后解析器的累计字节数从头开始，结算基准也要归零
-                countedWireBytes = 0L;
             } else {
                 state.setPeers(null);
                 stats.startedAt = 0L;
-                countedWireBytes = 0L;
                 if (injector != null) {
                     // 断链后要忘掉上一个解算的身份：重连后发送端的序号可能
                     // 从头开始（新进程），旧身份留着会把新位置误判成重复
@@ -422,6 +426,31 @@ public class ReceiveService extends Service {
                 }
             }
             refreshNotification();
+        }
+
+        /**
+         * 线上累计字节数与语句条数。
+         *
+         * <p><b>直接赋值，不做增量结算。</b>传上来的是「本次接收会话累计」，
+         * 已经跨重连累加好了 —— 增量结算反而会在重连时把数字算错。
+         *
+         * <p>这个回调与定位快照<b>分开</b>：发送端没有新定位时只发保活帧，
+         * 那时一个快照都不会发布，但链路上确实有数据在跑 ——
+         * 「链路看着连着但这个数不动」正是用户判断假连接的依据，
+         * 数字必须跟着字节流走。
+         */
+        @Override
+        public void onProgress(long bytes, long sentences) {
+            stats.bytes = bytes;
+            stats.sentences = sentences;
+            // 通知里的「已接收 N 句」也要跟着走：发送端没有新定位时只有保活帧，
+            // 那时不会有位置快照，通知不刷新的话这个数会一直停在原地。
+            // 每秒最多刷一次，别把通知刷成噪音。
+            long now = System.currentTimeMillis();
+            if (now - lastNotificationAt >= 1000L) {
+                lastNotificationAt = now;
+                refreshNotification();
+            }
         }
 
         @Override
@@ -433,25 +462,12 @@ public class ReceiveService extends Service {
                 stopSelfSafely(false);
                 return;
             }
-            // 「已接收语句」：与发送端的「已发送语句」同一个口径，
-            // 两边数字对得上就说明链路没丢东西。
-            stats.sentences = location.sentenceCount;
             // 位置速率：只数位置快照。卫星快照与位置快照是同一个解算，
             // 两边都数的话接收速率会翻倍（1 Hz 的 GPS 会显示成 2.0 定位/秒），
             // 与发送端的「发送速率」也对不上。
             if (!location.withSatellites) {
                 stats.frames++;
             }
-            // 数据量按**增量**结算：快照里的 wireBytes 是本连接累计值，
-            // 而一帧会发布两次（位置 + 卫星明细），直接累加会把同一帧算两遍。
-            long wireDelta = location.wireBytes - countedWireBytes;
-            if (wireDelta >= 0L) {
-                stats.bytes += wireDelta;
-            } else {
-                // 解析器被重置过（断线重连，累计值从头开始）
-                stats.bytes += location.wireBytes;
-            }
-            countedWireBytes = location.wireBytes;
             updateReceiveRate(System.currentTimeMillis());
             if (injector != null) {
                 injector.inject(location);

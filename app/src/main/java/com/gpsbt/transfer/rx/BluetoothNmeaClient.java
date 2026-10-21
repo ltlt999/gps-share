@@ -10,9 +10,7 @@ import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.state.NmeaLog;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.util.UUID;
 
@@ -35,7 +33,8 @@ public final class BluetoothNmeaClient implements ReceiveLink {
     private final UUID uuid;
     private final ReceiveLink.Callback callback;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final NmeaParser parser = new NmeaParser();
+    /** 读流骨架：解析、计数、上报都在里面，两条通道共用同一套行为。 */
+    private final NmeaStreamPump pump;
 
     private volatile boolean running;
     private BluetoothSocket socket;
@@ -47,6 +46,29 @@ public final class BluetoothNmeaClient implements ReceiveLink {
         this.label = label == null || label.isEmpty() ? mac : label;
         this.uuid = uuid;
         this.callback = callback;
+        this.pump = new NmeaStreamPump(new NmeaStreamPump.Listener() {
+            @Override
+            public void onSentence(String line) {
+                // 收到的每一条都记日志：与发送端对称，日志页的「卫星 / 数据」
+                // 筛选在接收角色下也有内容
+                NmeaLog.sentence(line);
+            }
+
+            @Override
+            public void onSnapshot(NmeaInput snapshot) {
+                // stop() 之后不再回调：服务已经清了状态
+                if (running) {
+                    callback.onLocation(snapshot);
+                }
+            }
+
+            @Override
+            public void onProgress(long bytes, long sentences) {
+                if (running) {
+                    callback.onProgress(bytes, sentences);
+                }
+            }
+        }, main);
     }
 
     @Override
@@ -102,7 +124,7 @@ public final class BluetoothNmeaClient implements ReceiveLink {
                 created = device.createInsecureRfcommSocketToServiceRecord(uuid);
                 created.connect();
                 socket = created;
-                parser.reset();
+                pump.resetParser();
                 postConnection(true, "已连接 " + label);
                 readLoop(created);
             } catch (IllegalArgumentException e) {
@@ -126,25 +148,8 @@ public final class BluetoothNmeaClient implements ReceiveLink {
     }
 
     private void readLoop(BluetoothSocket active) throws IOException {
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(active.getInputStream(), ASCII));
-        String line;
-        while (running && (line = reader.readLine()) != null) {
-            // 收到的每一条都记日志：与发送端对称，日志页的「卫星 / 数据」
-            // 筛选在接收角色下也有内容
-            NmeaLog.sentence(line);
-            final NmeaInput parsed = parser.accept(line);
-            if (parsed != null) {
-                main.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (running) {
-                            callback.onLocation(parsed);
-                        }
-                    }
-                });
-            }
-        }
+        // 读、解析、计数都在骨架里：TCP 与蓝牙两条通道的行为必须一致
+        pump.pump(active.getInputStream());
     }
 
     private void postConnection(final boolean connected, final String message) {

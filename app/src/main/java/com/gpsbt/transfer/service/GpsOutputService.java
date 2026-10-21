@@ -419,6 +419,14 @@ public class GpsOutputService extends Service {
                 link.write(payload);
             }
         }, generator, enabled, prefs.getStaleMillis());
+        // 新引擎的计数从头开始，统计也归零 —— 否则「已发送语句」会先掉到 0
+        // 再慢慢涨上来，看着像丢了一批数据
+        stats.reset();
+        // 速率窗口也要清：留着上一段的样本，新旧混在一起算出来的速率是错的
+        fixRateMeter.reset();
+        // 上一次解算的时刻也要清：新会话的第一个解算若与上一段最后那个
+        // 撞在同一毫秒，会被当成重复投递丢掉（去重判据是解算时刻）
+        lastFixTimeMillis = 0L;
 
         locationProvider = new LocationProvider(this);
         locationProvider.start(prefs.isAllowNetwork(), 1000 / Math.max(1, prefs.getRateHz()),
@@ -773,9 +781,13 @@ public class GpsOutputService extends Service {
             lastFixTimeMillis = full.utcMillis;
             // 序号严格对应「一个新的位置」：接收端靠它判断是不是同一个解算
             full.seq = ++fixSeq;
-            // 实际到达的定位速率：滑块控制的是请求频率，GPS 芯片能给多少是另一回事
-            fixRateMeter.onFix(full.utcMillis > 0L
-                    ? full.utcMillis : System.currentTimeMillis());
+            // 实际到达的定位速率：滑块控制的是请求频率，GPS 芯片能给多少是另一回事。
+            //
+            // 喂的是**到达时刻**，不是解算时刻：解算时刻可能来自缓存（网络兜底时
+            // 常常拿到的是几分钟前的位置），拿它算速率会算出一个偏小的数。
+            // 同一个解算被重复投递的情况在上一行已经按解算时刻挡掉了，
+            // 这里不会重复计数。
+            fixRateMeter.onFix(System.currentTimeMillis());
             stats.fixRateHz = fixRateMeter.rateHz();
             TransmitEngine current = engine;
             if (current != null) {

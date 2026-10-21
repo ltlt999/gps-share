@@ -19,6 +19,19 @@ public interface ReceiveLink {
 
         /** 解析出一条定位。 */
         void onLocation(NmeaInput location);
+
+        /**
+         * 线上累计字节数与语句条数。
+         *
+         * <p><b>与定位快照分开上报。</b>发送端没有新定位时只发保活帧
+         * （{@code $GPSSHARE} + {@code $GPZDA}），解析器一个快照都不发布 ——
+         * 计数跟着快照走的话，「已接收数据量」会整个冻住，用户会误判成假连接。
+         * 计数跟着字节流走，与有没有定位无关。
+         *
+         * <p>两个数都是<b>本次客户端生命周期</b>的累计值，断线重连不清零 ——
+         * 发送端那边的计数可不会归零，两端口径必须一样。
+         */
+        void onProgress(long bytes, long sentences);
     }
 
     void start();

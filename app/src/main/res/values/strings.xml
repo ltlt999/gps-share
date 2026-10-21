@@ -173,7 +173,10 @@
     <string name="stat_source">数据来源</string>
     <string name="stat_latency">定位延迟</string>
     <string name="stat_latency_value">%1$s 秒</string>
-    <string name="stat_latency_stale">已过期 %1$s 秒</string>
+    <string name="stat_latency_stale">已过期 %1$s</string>
+    <string name="stat_duration_sec">%1$d 秒</string>
+    <string name="stat_duration_min">%1$d 分</string>
+    <string name="stat_duration_hour">%1$d 小时</string>
     <string name="value_source_gps">GPS卫星定位</string>
     <string name="value_source_net">网络定位</string>
     <string name="stat_bytes">已发送数据量</string>

@@ -84,30 +84,11 @@ public final class NmeaInput {
      * 这份快照是否携带卫星明细。GSV 发布点为 true，位置发布点为 false。
      *
      * <p>这里的 {@code transient} 其实是空操作——本类从不序列化。它被当作
-     * 「不属于线上载荷」的标记来用，与同样空操作的 {@link #wireBytes} 保持一致：
-     * 这两个字段描述的是本地这份快照的形态，不是要发到线上的东西。
+     * 「不属于线上载荷」的标记来用。
      */
     public transient boolean withSatellites;
 
     public int satellitesUsed;
-    /**
-     * 这份快照对应的线上字节数（本连接累计收到的 NMEA 字节）。
-     * 接收端用它统计数据量；0 表示未知（比如快照是程序内部构造的）。
-     *
-     * <p><b>累计值，不是本帧的字节数。</b>一帧会发布两次（位置 + 卫星明细），
-     * 两次发布都带着同一个累计值。统计时要按「本次 − 上次」的增量结算，
-     * 直接累加会把同一帧算两遍。
-     */
-    public transient long wireBytes;
-
-    /**
-     * 本连接累计收到的 NMEA 语句条数。
-     *
-     * <p>与 {@link #wireBytes} 同一个口径：累计值，不是本帧的条数。
-     * 接收端用它统计「已接收语句」—— 与发送端的「已发送语句」是同一个量，
-     * 两边数字对得上就说明链路没丢东西。
-     */
-    public transient long sentenceCount;
 
     private final List<Sat> satellites = new ArrayList<>();
 
@@ -163,8 +144,6 @@ public final class NmeaInput {
         copy.bearingDeg = bearingDeg;
         copy.accuracyM = accuracyM;
         copy.satellitesUsed = satellitesUsed;
-        copy.wireBytes = wireBytes;
-        copy.sentenceCount = sentenceCount;
         copy.source = source;
         copy.seq = seq;
         copy.ageMillis = ageMillis;

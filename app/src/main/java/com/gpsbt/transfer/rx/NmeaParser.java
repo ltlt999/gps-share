@@ -54,6 +54,8 @@ public final class NmeaParser {
     private final NmeaInput state = new NmeaInput();
     private final List<SatEntry> entries = new ArrayList<>();
     private final Set<Integer> usedPrns = new HashSet<>();
+    /** 墙上时钟。解析器唯一的「现在」来源。 */
+    private final Clock clock;
     /**
      * 本周期是否已有 GGA（或 RMC）设过位置。GSV 到达时用 state 里的位置
      * 配合 entries 里的卫星打包成快照。
@@ -63,24 +65,6 @@ public final class NmeaParser {
      * GSV 覆盖，所以 UI 最终显示的是正确数字。
      */
     private boolean hasFix;
-    /**
-     * 本连接累计收到的线上字节（含
-     与校验和）。
-     *
-     * <p><b>累计，不按帧归零。</b>一帧会发布两次（位置 + 卫星明细），
-     * 接收端按快照累加时若每帧归零就会把同一帧算两遍。接收端应当按
-     * 「本次值 − 上次值」的增量结算。
-     */
-    private long wireBytes;
-
-    /**
-     * 本连接累计收到的语句条数。
-     *
-     * <p>与 {@link #wireBytes} 同一个口径：累计、不按帧归零。
-     * 接收端用它统计「已接收语句」—— 与发送端的「已发送语句」是同一个量，
-     * 两边数字对得上就说明链路没丢东西。
-     */
-    private long sentenceCount;
 
     /**
      * 本帧的位置已经就位、但还没发布 —— 在等 RMC 补齐本周期的速度与航向。
@@ -89,6 +73,23 @@ public final class NmeaParser {
      * 位置会在下一帧开头（{@code $GPSSHARE} 或 GGA 到达时）补发。
      */
     private boolean positionPending;
+
+    /**
+     * 待补发的位置是什么时候到的（墙上时钟，毫秒）。
+     *
+     * <p>位置在解析器里多待的这段时间，必须算进解算年龄 —— 否则注入给系统的
+     * 时间戳会比真实解算时刻<b>新</b>整整一个等待周期（关掉 RMC 时约 1 秒）：
+     * 位置明明旧了一秒，却报成「刚刚解算」。
+     */
+    private long pendingSinceMillis;
+
+    /**
+     * 待补发的位置那一帧是不是带 {@code $GPSSHARE} 的。
+     *
+     * <p>只有 v2 发送端才带得了「解算年龄」，也只有它才能把等待时间加进去 ——
+     * 对 v1.6.2 发送端，年龄恒为 0（协议里根本没这个量），保持原样。
+     */
+    private boolean pendingHasShare;
 
     /**
      * {@code $GPSSHARE} 带来的真实水平精度。NaN = 本帧没有（或发送端是旧版，没有该语句）。
@@ -108,6 +109,47 @@ public final class NmeaParser {
      */
     private boolean seenShareInFrame;
 
+    /**
+     * 发送端是否说 v2 协议（本次连接里收到过 {@code $GPSSHARE}）。
+     *
+     * <p><b>它决定「精度未知」该怎么表达。</b>
+     * <ul>
+     *   <li>v2 发送端带了 {@code $GPSSHARE} 却<b>没有 ACC 键</b> —— 那是它明确说
+     *       「精度未知」。这时拿 GGA 的 HDOP×5 编一个值出来是在撒谎：
+     *       HDOP 是几何精度因子，除以 5 只是历史上的换算，上限 49.5 m，
+     *       跟真实精度不是一回事。必须保持 NaN（未知）。
+     *   <li>整帧都没有 {@code $GPSSHARE}（对 v1.6.2 发送端）—— 没有别的信息源，
+     *       这时才退回 HDOP×5 兜底。
+     * </ul>
+     */
+    private boolean senderSendsShare;
+
+    /**
+     * 墙上时钟。解析器唯一的「现在」来源。
+     *
+     * <p>抽出来是为了可测：补发位置时要把「在解析器里等了多久」算进解算年龄，
+     * 这段等待必须能被人为控制，否则单测只能靠 sleep。
+     */
+    public interface Clock {
+        long nowMillis();
+    }
+
+    /** 系统墙上时钟。 */
+    public static final Clock SYSTEM_CLOCK = new Clock() {
+        @Override
+        public long nowMillis() {
+            return System.currentTimeMillis();
+        }
+    };
+
+    public NmeaParser() {
+        this(SYSTEM_CLOCK);
+    }
+
+    public NmeaParser(Clock clock) {
+        this.clock = clock == null ? SYSTEM_CLOCK : clock;
+    }
+
     /** 清空累积状态（断线重连时调用）。 */
     public void reset() {
         state.valid = false;
@@ -123,11 +165,12 @@ public final class NmeaParser {
         entries.clear();
         usedPrns.clear();
         hasFix = false;
-        wireBytes = 0L;
-        sentenceCount = 0L;
         positionPending = false;
+        pendingSinceMillis = 0L;
+        pendingHasShare = false;
         metaAccuracyM = Float.NaN;
         seenShareInFrame = false;
+        senderSendsShare = false;
         state.seq = 0L;
         state.ageMillis = 0L;
         state.source = NmeaInput.Source.NONE;
@@ -162,13 +205,6 @@ public final class NmeaParser {
         if (body == null) {
             return null;
         }
-        // 字节数在这里累计：凡是校验通过的语句都要算，与语句类型无关
-        // （保活帧的 $GPZDA、暂时不认识的语句类型也都算）。
-        //
-        // **累计而非每帧归零**：接收端据此统计「已接收数据量」。一帧会发布两次
-        // （位置 + 卫星明细），若每帧归零，接收端按快照累加就会把同一帧算两遍。
-        wireBytes += text.length() + 2;
-        sentenceCount++;
         String[] f = body.split(",", -1);
         if (f.length == 0 || f[0].length() < MIN_SENTENCE_FIELD_LENGTH) {
             return null;
@@ -180,6 +216,9 @@ public final class NmeaParser {
             // 等 applyShare 把本帧的元信息填进来就晚了。
             NmeaInput deferred = flushPendingPosition();
             seenShareInFrame = true;
+            // 这个发送端说的是 v2 协议：往后它对精度的表态（给值或明说未知）
+            // 都要当真，不能再拿 GGA 的 HDOP 编一个出来。
+            senderSendsShare = true;
             applyShare(f);
             return deferred;
         }
@@ -189,7 +228,10 @@ public final class NmeaParser {
             // 帧边界（对没有 $GPSSHARE 的旧版发送端，GGA 就是帧边界）：
             // 上一帧若因缺 RMC 而没发出去，此刻补发。
             NmeaInput deferred = flushPendingPosition();
-            if (!seenShareInFrame) {
+            // 本帧有没有 $GPSSHARE：既决定元信息怎么处理，也决定补发的位置
+            // 能不能把「等了多久」加进解算年龄。
+            boolean hadShare = seenShareInFrame;
+            if (!hadShare) {
                 // 本帧没有 $GPSSHARE：元信息必须清成「未知」，
                 // 否则会把上一帧的精度、年龄、来源留到这一帧。
                 metaAccuracyM = Float.NaN;
@@ -203,6 +245,8 @@ public final class NmeaParser {
             // 不在这里发布：RMC 紧跟其后，带着本周期的速度与航向。
             // 此刻发布的话，速度与航向会是上一周期的旧值。
             positionPending = true;
+            pendingSinceMillis = clock.nowMillis();
+            pendingHasShare = hadShare;
             return deferred;
         }
         if ("RMC".equals(type)) {
@@ -233,8 +277,6 @@ public final class NmeaParser {
             return null;
         }
         NmeaInput snap = state.copy();
-        snap.wireBytes = wireBytes;
-        snap.sentenceCount = sentenceCount;
         snap.clearSats();
         snap.withSatellites = false;
         applyMetaAccuracy(snap);
@@ -247,8 +289,6 @@ public final class NmeaParser {
             return null;
         }
         NmeaInput snap = state.copy();
-        snap.wireBytes = wireBytes;
-        snap.sentenceCount = sentenceCount;
         snap.clearSats();
         for (SatEntry entry : entries) {
             snap.addSat(new NmeaInput.Sat(entry.prn, entry.elevation, entry.azimuth,
@@ -271,13 +311,27 @@ public final class NmeaParser {
      *
      * <p>宁可晚 1 秒，也要给完整的一份数据 —— 「速度航向是上一周期、其余是本周期」
      * 的混合数据比晚 1 秒的完整数据更糟。
+     *
+     * <p><b>等待的时间要算进解算年龄。</b>位置在解析器里多待的这段时间，
+     * 它比 {@code $GPSSHARE} 里写的 AGE 更老。不补上的话，注入给系统的时间戳
+     * 会比真实解算时刻<b>新</b>整整一个等待周期（关掉 RMC 时约 1 秒）——
+     * 位置明明旧了一秒，却报成「刚刚解算」，导航 App 会以为这个点很新。
      */
     private NmeaInput flushPendingPosition() {
         if (!positionPending) {
             return null;
         }
         positionPending = false;
-        return publishPosition();
+        NmeaInput snap = publishPosition();
+        if (snap != null && pendingHasShare) {
+            // 只有 v2 发送端才有「解算年龄」这个量，也才谈得上把它调大。
+            // 对 v1.6.2 发送端年龄恒为 0（协议里没有这个量），保持原样。
+            long waited = clock.nowMillis() - pendingSinceMillis;
+            if (waited > 0L) {
+                snap.ageMillis += waited;
+            }
+        }
+        return snap;
     }
 
     /** 去掉 $ 前缀并校验 *CS；校验失败或格式不符返回 null。 */
@@ -314,9 +368,19 @@ public final class NmeaParser {
         }
         state.satellitesUsed = Math.max(0, parseInt(f[7], 0));
         state.altitudeM = parseDouble(f[9], 0d);
-        double hdop = parseDouble(f[8], Double.NaN);
-        // 与生成器对称：hdop = accuracy / 5
-        state.accuracyM = Double.isNaN(hdop) ? Float.NaN : (float) (hdop * 5.0d);
+        // HDOP×5 兜底只对**不说 v2 协议**的发送端生效。
+        //
+        // v2 发送端已经在 $GPSSHARE 里表态了：给 ACC 就是给真值，不给 ACC
+        // 就是明说「精度未知」。这时候拿 GGA 的 HDOP 编一个出来是在撒谎 ——
+        // HDOP 是几何精度因子，除以 5 只是历史上的换算（上限 49.5 m），
+        // 跟真实精度不是一回事。宁可让接收端知道「不知道」。
+        if (senderSendsShare) {
+            state.accuracyM = Float.NaN;
+        } else {
+            double hdop = parseDouble(f[8], Double.NaN);
+            // 与生成器对称：hdop = accuracy / 5
+            state.accuracyM = Double.isNaN(hdop) ? Float.NaN : (float) (hdop * 5.0d);
+        }
         return true;
     }
 

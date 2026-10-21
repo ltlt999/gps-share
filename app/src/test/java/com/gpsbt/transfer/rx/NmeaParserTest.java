@@ -357,93 +357,105 @@ public class NmeaParserTest {
         assertEquals(in.latitude, snap.latitude, 1e-4);
     }
 
-    @Test
-    public void wireBytesAccumulateAcrossFrames() {
-        NmeaInput in = sample();
-        Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
-
-        NmeaInput first = null;
-        for (String line : generator.buildFrame(in, all, 0L).split("\r\n")) {
-            NmeaInput snap = parser.accept(line);
-            if (snap != null) {
-                first = snap;
-            }
-        }
-        assertNotNull(first);
-        assertTrue(first.wireBytes > 0);
-
-        NmeaInput second = null;
-        for (String line : generator.buildFrame(in, all, 0L).split("\r\n")) {
-            NmeaInput snap = parser.accept(line);
-            if (snap != null) {
-                second = snap;
-            }
-        }
-        assertNotNull(second);
-        // 累计值只会变大：接收端按「本次 − 上次」的增量结算，
-        // 直接累加会把同一帧（发布两次）算两遍
-        assertTrue(second.wireBytes > first.wireBytes);
-    }
+    // ---- 精度未知（v2 发送端明说「不知道」） ----
 
     @Test
-    public void wireBytesCountKeepaliveToo() {
-        // 保活帧的 $GPZDA 也要算进数据量，否则「已接收数据量」会漏掉
-        // 发送端没有新定位时的那部分流量
-        parser.accept(generator.zda(1_700_000_000_000L));
-        parser.accept(generator.zda(1_700_000_001_000L));
+    public void v2SenderSayingAccuracyUnknownIsNotGivenAFabricatedOne() {
+        // 发送端说「精度未知」：$GPSSHARE 里没有 ACC 键（协议里缺键 = 未知）。
+        // 接收端若拿 GGA 的 HDOP×5 编一个出来（哪怕那个数看着挺合理），
+        // 那就是在谎报一个并不存在的精度 —— 违背 v2 的第一原则：不编造。
+        NmeaInput shareIn = sample();
+        shareIn.accuracyM = Float.NaN;
+        NmeaInput ggaIn = sample();
+        ggaIn.accuracyM = 5.0f;   // GGA 里的 HDOP×5 = 5.0
 
-        NmeaInput in = sample();
-        NmeaInput snap = null;
-        for (String line : generator.buildFrame(in, EnumSet.of(NmeaSentenceType.RMC), 0L)
-                .split("\r\n")) {
-            NmeaInput parsed = parser.accept(line);
-            if (parsed != null) {
-                snap = parsed;
-            }
-        }
+        parser.accept(share(shareIn, 1L, 100L, NmeaInput.Source.GPS));
+        parser.accept(generator.gga(ggaIn));
+        NmeaInput snap = parser.accept(generator.rmc(ggaIn));
+
         assertNotNull(snap);
-        assertTrue(snap.wireBytes > 0);
+        assertTrue("发送端明说精度未知，接收端不许编一个出来",
+                Float.isNaN(snap.accuracyM));
     }
 
     @Test
-    public void sentenceCountTracksReceivedStatements() {
-        // 接收端的「已接收语句」要与发送端的「已发送语句」是同一个量：
-        // 两边数字对得上，就说明链路没丢东西
+    public void v2SenderWithAccuracyStillWins() {
+        // 反例对照：说了精度就必须用真值，不能被 HDOP 兜底盖掉。
+        NmeaInput shareIn = sample();
+        shareIn.accuracyM = 12.5f;
+        NmeaInput ggaIn = sample();
+        ggaIn.accuracyM = 5.0f;
+
+        parser.accept(share(shareIn, 1L, 100L, NmeaInput.Source.GPS));
+        parser.accept(generator.gga(ggaIn));
+        NmeaInput snap = parser.accept(generator.rmc(ggaIn));
+
+        assertNotNull(snap);
+        assertEquals(12.5f, snap.accuracyM, 0.001f);
+    }
+
+    // ---- 补发位置的年龄 ----
+
+    /** 可控时钟：补发位置时的「等待了多久」必须能被人为控制，否则单测只能靠 sleep。 */
+    private static final class FakeClock implements NmeaParser.Clock {
+        long now = 1_000_000L;
+
+        @Override
+        public long nowMillis() {
+            return now;
+        }
+    }
+
+    @Test
+    public void deferredPositionCarriesTheWaitTimeInItsAge() {
+        // 关掉 RMC 时位置拖到下一帧开头才发。它在解析器里多等了 1 秒，
+        // 年龄必须加上这 1 秒 —— 否则注入给系统的时间戳比真实解算时刻**新**了 1 秒，
+        // 位置明明旧了却报成「刚刚解算」。
+        FakeClock clock = new FakeClock();
+        NmeaParser clocked = new NmeaParser(clock);
         NmeaInput in = sample();
-        Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
-        String[] lines = generator.buildFrame(in, all, 0L).split("\r\n");
 
-        NmeaInput last = null;
-        for (String line : lines) {
-            NmeaInput snap = parser.accept(line);
-            if (snap != null) {
-                last = snap;
-            }
-        }
-        assertNotNull(last);
-        // 快照带的是「到此刻为止收到的语句数」。帧尾那条语句（VTG）不触发发布，
-        // 所以最后一个快照的计数会比整帧少一条 —— 下一帧的发布会把它补上。
-        assertTrue(last.sentenceCount > 0);
-        assertTrue(last.sentenceCount <= lines.length);
+        clocked.accept(share(in, 1L, 0L, NmeaInput.Source.GPS));
+        clocked.accept(generator.gga(in));   // 这一帧没有 RMC，位置待发
+        clock.now = 1_001_000L;              // 等了一秒
+        NmeaInput snap = clocked.accept(share(in, 2L, 1000L, NmeaInput.Source.GPS));
 
-        // 字节数同理：每条语句的长度 + 换行符
-        int expected = 0;
-        for (String line : lines) {
-            expected += line.length() + 2;
-        }
-        assertTrue(last.wireBytes > 0);
-        assertTrue(last.wireBytes <= expected);
+        assertNotNull(snap);
+        // 上一帧的 AGE 是 0，加上等待的 1000 毫秒
+        assertEquals(1000L, snap.ageMillis);
+    }
 
-        // 第二帧之后，累计值必然超过第一帧的语句总数（帧尾的语句已被计上）
-        NmeaInput later = null;
-        for (String line : generator.buildFrame(in, all, 0L).split("\r\n")) {
-            NmeaInput snap = parser.accept(line);
-            if (snap != null) {
-                later = snap;
-            }
-        }
-        assertNotNull(later);
-        assertTrue(later.sentenceCount > lines.length);
+    @Test
+    public void deferredPositionFromLegacySenderKeepsAgeZero() {
+        // v1.6.2 发送端没有 $GPSSHARE，也就没有「解算年龄」这个量：
+        // 年龄恒为 0（完全退回旧行为），不能凭空给它加等待时间。
+        FakeClock clock = new FakeClock();
+        NmeaParser clocked = new NmeaParser(clock);
+        NmeaInput in = sample();
+
+        clocked.accept(generator.gga(in));
+        clock.now = 1_001_000L;
+        NmeaInput snap = clocked.accept(generator.gga(in));
+
+        assertNotNull(snap);
+        assertEquals(0L, snap.ageMillis);
+    }
+
+    @Test
+    public void positionPublishedOnRmcIsNotDelayed() {
+        // 反例对照：正常路径（有 RMC）不该被算上等待时间 ——
+        // 位置是当场发布的，等待时间根本不存在。
+        FakeClock clock = new FakeClock();
+        NmeaParser clocked = new NmeaParser(clock);
+        NmeaInput in = sample();
+
+        clocked.accept(share(in, 1L, 300L, NmeaInput.Source.GPS));
+        clocked.accept(generator.gga(in));
+        clock.now = 1_005_000L;
+        NmeaInput snap = clocked.accept(generator.rmc(in));
+
+        assertNotNull(snap);
+        assertEquals(300L, snap.ageMillis);
     }
 
     @Test
