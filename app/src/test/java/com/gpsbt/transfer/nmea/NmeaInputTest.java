@@ -19,6 +19,7 @@ public class NmeaInputTest {
         in.speedAccuracyMps = 0.8f;
         in.bearingAccuracyDeg = 15f;
         in.source = NmeaInput.Source.NET;
+        in.withSatellites = true;
 
         NmeaInput copy = in.copy();
 
@@ -29,6 +30,10 @@ public class NmeaInputTest {
         assertEquals(0.8f, copy.speedAccuracyMps, 0.001f);
         assertEquals(15f, copy.bearingAccuracyDeg, 0.001f);
         assertEquals(NmeaInput.Source.NET, copy.source);
+        assertTrue(copy.withSatellites);
+        // 既有字段同样要跟着复制
+        assertTrue(copy.valid);
+        assertEquals(1_700_000_000_000L, copy.utcMillis);
     }
 
     @Test
@@ -55,10 +60,18 @@ public class NmeaInputTest {
     }
 
     @Test
-    public void ageNeverNegative() {
+    public void ageFallsBackToWallClockWhenUptimeWentBackwards() {
+        NmeaInput in = new NmeaInput();
+        in.fixElapsedRealtimeNanos = 5_000_000_000L;   // now 反而更早
+        in.utcMillis = 1_700_000_000_000L;
+        assertEquals(1500L, in.computeAgeMillis(999_000_000L, 1_700_000_001_500L));
+    }
+
+    @Test
+    public void ageClampsToZeroWhenClockWentBackwards() {
         NmeaInput in = new NmeaInput();
         in.utcMillis = 1_700_000_000_000L;
-        assertTrue(in.computeAgeMillis(0L, 1_699_999_000_000L) >= 0L);
+        assertEquals(0L, in.computeAgeMillis(0L, 1_699_999_000_000L));
     }
 
     @Test
@@ -67,6 +80,7 @@ public class NmeaInputTest {
         assertEquals("NET", NmeaInput.Source.NET.wire());
         assertEquals("NONE", NmeaInput.Source.NONE.wire());
         assertEquals(NmeaInput.Source.GPS, NmeaInput.Source.fromWire("gps"));
+        assertEquals(NmeaInput.Source.GPS, NmeaInput.Source.fromWire(" gps "));
         assertEquals(NmeaInput.Source.NET, NmeaInput.Source.fromWire("NET"));
         assertEquals(NmeaInput.Source.NONE, NmeaInput.Source.fromWire("??"));
         assertEquals(NmeaInput.Source.NONE, NmeaInput.Source.fromWire(null));

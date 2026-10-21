@@ -21,6 +21,14 @@ public final class NmeaInput {
     public enum Source {
         NONE, GPS, NET;
 
+        /**
+         * 线上协议的字面拼写。
+         *
+         * <p>这里刻意写字符串字面量而不是 {@code name()}：返回值会进 $GPSSHARE 语句，
+         * 是两端之间的协议约定。将来枚举常量若改名（例如 {@code NET} 改成 {@code NETWORK}），
+         * 线上协议必须仍然发 {@code NET}；写成 {@code name()} 的话，一次改名就会静默
+         * 改掉协议、把两端解析对不上。
+         */
         public String wire() {
             switch (this) {
                 case GPS:
@@ -51,7 +59,18 @@ public final class NmeaInput {
     public Source source = Source.NONE;
     /** 解算序号：发送端每次真正的新解算 +1。接收端用它判定「是不是同一个解算」。 */
     public long seq;
-    /** 本次解算的年龄（毫秒）。发送端在发帧时刻算出，接收端从 $GPSSHARE 解析得到。 */
+    /**
+     * 本次解算的年龄（毫秒）。
+     *
+     * <p><b>发送端不算这个字段。</b>发送端的唯一年龄入口是
+     * {@link #computeAgeMillis(long, long)}，其返回值直接作为参数一路传给发帧方法，
+     * <b>不会回写本字段</b>。所以改年龄计算只需改 {@code computeAgeMillis}，无需动这里。
+     *
+     * <p><b>接收端填这个字段。</b>它是从线上 $GPSSHARE 语句里解析出来的载荷。
+     *
+     * <p>两者同名不冲突：一个在发送端<b>算</b>（方法），一个在接收端<b>填</b>（字段），
+     * 两条路径互不相交。后续代码不要以为需要「同步维护」它们。
+     */
     public long ageMillis;
     /** 解算时刻对应的 uptime（纳秒）。发送端填；接收端不用。 */
     public long fixElapsedRealtimeNanos;
@@ -61,7 +80,13 @@ public final class NmeaInput {
     public float speedAccuracyMps = Float.NaN;
     /** 航向精度（度）。NaN = 未知。 */
     public float bearingAccuracyDeg = Float.NaN;
-    /** 这份快照是否携带卫星明细。GSV 发布点为 true，位置发布点为 false。 */
+    /**
+     * 这份快照是否携带卫星明细。GSV 发布点为 true，位置发布点为 false。
+     *
+     * <p>这里的 {@code transient} 其实是空操作——本类从不序列化。它被当作
+     * 「不属于线上载荷」的标记来用，与同样空操作的 {@link #wireBytes} 保持一致：
+     * 这两个字段描述的是本地这份快照的形态，不是要发到线上的东西。
+     */
     public transient boolean withSatellites;
 
     public int satellitesUsed;
@@ -141,11 +166,24 @@ public final class NmeaInput {
     }
 
     /**
-     * 算出本次解算的年龄（毫秒）。
+     * 算出本次解算的年龄（毫秒）。<b>发送端</b>唯一的年龄计算入口，返回值直接
+     * 传给发帧方法；它<b>不回写</b> {@link #ageMillis} 字段（那是接收端的载荷）。
      *
-     * 优先用 uptime：elapsedRealtimeNanos 不受用户改时间、时区切换、NTP 校时
+     * <p>优先用 uptime：elapsedRealtimeNanos 不受用户改时间、时区切换、NTP 校时
      * 影响，而且与 Android 平台判断定位新鲜度（{@code Location.isFresh()}）
      * 用的是同一把尺子。拿不到时退回墙上时钟。
+     *
+     * <p>守卫 {@code nowElapsedRealtimeNanos > fixElapsedRealtimeNanos} 同时在做两件事：
+     * 一是<b>拒绝 uptime 倒流</b>——now 反而比 fix 更早（uptime 被重置、或调用方传错了
+     * 参数）时算出的差值是负的、没有意义，必须走墙上时钟；顺带也把<b>「调用方根本没传
+     * uptime」</b>识别出来了——那种情况 {@code now == 0}，同样落进墙上时钟分支。
+     * 两种情况合并成一个判断即可，不必拆开。
+     *
+     * @param nowElapsedRealtimeNanos 调用时刻的 uptime（纳秒），来自
+     *     {@code SystemClock.elapsedRealtimeNanos()}；传 0 表示调用方没有 uptime
+     * @param nowWallMillis 调用时刻的墙上时钟（毫秒），来自
+     *     {@code System.currentTimeMillis()}；只有在上面被守卫挡住时才用得上
+     * @return 年龄（毫秒），钳到不小于 0（用户把时钟往回拨时返回 0，当作刚解算）
      */
     public long computeAgeMillis(long nowElapsedRealtimeNanos, long nowWallMillis) {
         if (fixElapsedRealtimeNanos > 0 && nowElapsedRealtimeNanos > fixElapsedRealtimeNanos) {
