@@ -7,6 +7,7 @@ import android.location.GnssStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -136,7 +137,7 @@ public final class LocationProvider {
                     fallbackActive = false;
                     current.onStatus("GPS 已恢复，停用网络定位兜底");
                 }
-                current.onFix(toInput(location));
+                current.onFix(toInput(location, NmeaInput.Source.GPS));
                 return;
             }
             // 网络定位（WiFi/基站）：仅在 GPS 迟迟无定位时兜底发出
@@ -147,7 +148,7 @@ public final class LocationProvider {
                 fallbackActive = true;
                 current.onStatus("GPS 无定位，已切换网络定位兜底（精度较低，WiFi/基站）");
             }
-            current.onFix(toInput(location));
+            current.onFix(toInput(location, NmeaInput.Source.NET));
         }
 
         @Override
@@ -214,18 +215,102 @@ public final class LocationProvider {
         }
     }
 
-    /** 把 Android Location 转成 NmeaInput。 */
-    public static NmeaInput toInput(Location location) {
+    /**
+     * 把 Android Location 转成 NmeaInput。source 由调用方按 provider 判定。
+     *
+     * @param location 系统给的定位结果
+     * @param source 数据来源：卫星定位 / 网络定位；null 按「无」处理
+     */
+    public static NmeaInput toInput(Location location, NmeaInput.Source source) {
         NmeaInput input = new NmeaInput();
-        input.utcMillis = System.currentTimeMillis();
         input.valid = true;
         input.latitude = location.getLatitude();
         input.longitude = location.getLongitude();
         input.altitudeM = location.hasAltitude() ? location.getAltitude() : 0d;
         input.speedMps = location.hasSpeed() ? location.getSpeed() : 0d;
         input.bearingDeg = location.hasBearing() ? location.getBearing() : 0d;
-        input.accuracyM = location.hasAccuracy() ? location.getAccuracy() : Float.NaN;
+        input.source = source == null ? NmeaInput.Source.NONE : source;
+        applyFixMetadata(input,
+                location.getTime(),
+                location.getElapsedRealtimeNanos(),
+                location.hasAccuracy() ? location.getAccuracy() : Float.NaN,
+                verticalAccuracy(location),
+                speedAccuracy(location),
+                bearingAccuracy(location),
+                System.currentTimeMillis());
         return input;
+    }
+
+    /**
+     * 把定位的原始量填进快照。<b>纯逻辑，不碰 Android 框架</b>，所以可单测 ——
+     * 单元测试里的 {@code android.location.Location} 是空壳桩，{@code getTime()} 恒为 0，
+     * 什么也断言不了。
+     *
+     * @param fixTimeMillis 真实解算时刻（{@code location.getTime()}）；&lt;= 0 表示取不到，
+     *     退回 {@code nowMillis}
+     * @param elapsedRealtimeNanos 解算时刻对应的 uptime；&lt;= 0 表示取不到，
+     *     年龄计算会退回墙上时钟
+     * @param accuracyM 水平精度；NaN 表示未知
+     * @param verticalAccuracyM 垂直精度；NaN 表示未知
+     * @param speedAccuracyMps 速度精度；NaN 表示未知
+     * @param bearingAccuracyDeg 航向精度；NaN 表示未知
+     * @param nowMillis 当前墙上时钟，仅在解算时刻取不到时用作兜底
+     */
+    static void applyFixMetadata(NmeaInput input, long fixTimeMillis, long elapsedRealtimeNanos,
+                                 float accuracyM, float verticalAccuracyM, float speedAccuracyMps,
+                                 float bearingAccuracyDeg, long nowMillis) {
+        // 真实解算时刻。v1.6.2 用的是「当前时刻」，于是接收端无从知道
+        // 这个位置是什么时候测的 —— 解算年龄在协议里根本没法传。
+        input.utcMillis = fixTimeMillis > 0L ? fixTimeMillis : nowMillis;
+        input.fixElapsedRealtimeNanos = elapsedRealtimeNanos;
+        input.accuracyM = accuracyM;
+        input.verticalAccuracyM = verticalAccuracyM;
+        input.speedAccuracyMps = speedAccuracyMps;
+        input.bearingAccuracyDeg = bearingAccuracyDeg;
+    }
+
+    /**
+     * 垂直精度：API 26 起才有；更低的系统上没有这个概念，返回 NaN（未知）。
+     *
+     * <p>系统版本单独作为参数：单测里 {@code Build.VERSION.SDK_INT} 恒为 0，
+     * 直接读它就分不出「版本低」和「系统没给垂直精度」这两种情况。
+     */
+    static float verticalAccuracy(Location location, int sdkInt) {
+        if (sdkInt < Build.VERSION_CODES.O) {
+            return Float.NaN;
+        }
+        return location.hasVerticalAccuracy() ? location.getVerticalAccuracyMeters() : Float.NaN;
+    }
+
+    /** 垂直精度：API 26 起才有；更低的系统上没有这个概念，返回 NaN（未知）。 */
+    static float verticalAccuracy(Location location) {
+        return verticalAccuracy(location, Build.VERSION.SDK_INT);
+    }
+
+    /** 速度精度（米/秒）：API 26 起才有；更低的系统上返回 NaN（未知）。 */
+    static float speedAccuracy(Location location, int sdkInt) {
+        if (sdkInt < Build.VERSION_CODES.O) {
+            return Float.NaN;
+        }
+        return location.hasSpeedAccuracy() ? location.getSpeedAccuracyMetersPerSecond() : Float.NaN;
+    }
+
+    /** 速度精度（米/秒）：API 26 起才有；更低的系统上返回 NaN（未知）。 */
+    static float speedAccuracy(Location location) {
+        return speedAccuracy(location, Build.VERSION.SDK_INT);
+    }
+
+    /** 航向精度（度）：API 26 起才有；更低的系统上返回 NaN（未知）。 */
+    static float bearingAccuracy(Location location, int sdkInt) {
+        if (sdkInt < Build.VERSION_CODES.O) {
+            return Float.NaN;
+        }
+        return location.hasBearingAccuracy() ? location.getBearingAccuracyDegrees() : Float.NaN;
+    }
+
+    /** 航向精度（度）：API 26 起才有；更低的系统上返回 NaN（未知）。 */
+    static float bearingAccuracy(Location location) {
+        return bearingAccuracy(location, Build.VERSION.SDK_INT);
     }
 
     /** 取最近一次卫星快照并对定位快照补齐卫星字段。 */
