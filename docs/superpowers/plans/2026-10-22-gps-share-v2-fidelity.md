@@ -50,7 +50,7 @@ JDK 由用户级 `~/.gradle/gradle.properties` 固定为 Android Studio 自带 J
 - Modify: `app/src/main/java/com/gpsbt/transfer/nmea/NmeaInput.java`
 - Create: `app/src/test/java/com/gpsbt/transfer/nmea/NmeaInputTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create `app/src/test/java/com/gpsbt/transfer/nmea/NmeaInputTest.java`:
 
@@ -131,12 +131,12 @@ public class NmeaInputTest {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*NmeaInputTest"`
 Expected: FAIL —— 编译错误「找不到符号: 方法 copy 之外的字段 seq / ageMillis / computeAgeMillis / Source」
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 Modify `app/src/main/java/com/gpsbt/transfer/nmea/NmeaInput.java` —— 在 `accuracyM` 字段之后插入：
 
@@ -229,12 +229,12 @@ import java.util.Locale;
     }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*NmeaInputTest"`
 Expected: PASS，6 个用例全过
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/nmea/NmeaInput.java app/src/test/java/com/gpsbt/transfer/nmea/NmeaInputTest.java
@@ -249,7 +249,7 @@ git commit -m "feat(NmeaInput): 扩展元信息字段（来源/序号/年龄/垂
 - Modify: `app/src/main/java/com/gpsbt/transfer/nmea/NmeaGenerator.java`
 - Modify: `app/src/test/java/com/gpsbt/transfer/nmea/NmeaGeneratorTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `app/src/test/java/com/gpsbt/transfer/nmea/NmeaGeneratorTest.java` 的类末尾追加：
 
@@ -336,12 +336,12 @@ git commit -m "feat(NmeaInput): 扩展元信息字段（来源/序号/年龄/垂
 import static org.junit.Assert.assertFalse;
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*NmeaGeneratorTest"`
 Expected: FAIL —— 编译错误「找不到符号: 方法 gpsShare / keepaliveFrame，buildFrame 参数不匹配」
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 Modify `app/src/main/java/com/gpsbt/transfer/nmea/NmeaGenerator.java`：
 
@@ -420,14 +420,14 @@ Modify `app/src/main/java/com/gpsbt/transfer/nmea/NmeaGenerator.java`：
     }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*NmeaGeneratorTest"`
 Expected: PASS
 
 注意：`buildFrame` 签名变了，全项目还有旧调用点，**这一步先只让测试编译过**。旧调用点在 Task 5 修；若编译报其它模块的错误，先把旧调用点改成 `buildFrame(in, enabled, 0L)` 临时兜住，Task 5 再统一改。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/nmea/NmeaGenerator.java app/src/test/java/com/gpsbt/transfer/nmea/NmeaGeneratorTest.java
@@ -449,7 +449,7 @@ git commit -m "feat(NmeaGenerator): 新增 \$GPSSHARE 元数据语句与保活�
 - 卫星在 **GSV** 处发布（与 v1.6.2 一致）。
 - **删除** v1.6.2 在 GGA 处的 leftover 发布（它会把上一周期的旧位置再发一次）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `app/src/test/java/com/gpsbt/transfer/rx/NmeaParserTest.java` 类末尾追加：
 
@@ -543,12 +543,12 @@ git commit -m "feat(NmeaGenerator): 新增 \$GPSSHARE 元数据语句与保活�
     }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*NmeaParserTest"`
 Expected: FAIL —— `seq` / `ageMillis` / `source` 字段不存在（Task 1 已加，但 `withSatellites` 与新发布点未实现）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 Modify `app/src/main/java/com/gpsbt/transfer/rx/NmeaParser.java`。
 
@@ -752,7 +752,7 @@ Modify `app/src/main/java/com/gpsbt/transfer/rx/NmeaParser.java`。
 
 `reset()` 里补 `state.seq = 0L; state.ageMillis = 0L; state.source = NmeaInput.Source.NONE; state.verticalAccuracyM = Float.NaN; state.speedAccuracyMps = Float.NaN; state.bearingAccuracyDeg = Float.NaN;`（`state.accuracyM` 已有）。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*NmeaParserTest"`
 Expected: PASS
@@ -761,7 +761,7 @@ Expected: PASS
 - `roundTripThroughGenerator` 里改成「喂完整帧，取最后一次发布」即可
 - `gsvFeedsSatelliteListWithTalker` / `gsaMarksUsedSatellites` 里在喂 GSV 前先喂 GGA+RMC，让 `hasFix` 为真
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/rx/NmeaParser.java app/src/test/java/com/gpsbt/transfer/rx/NmeaParserTest.java
@@ -778,7 +778,7 @@ git commit -m "feat(NmeaParser): 解析 \$GPSSHARE，位置改在 RMC 处发布�
 - Modify: `app/src/main/java/com/gpsbt/transfer/engine/LocationProvider.java`
 - Modify: `app/src/test/java/com/gpsbt/transfer/engine/LocationProviderTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `app/src/test/java/com/gpsbt/transfer/engine/LocationProviderTest.java` 类末尾追加（需要 `android.location.Location` 桩；该测试文件已 import）：
 
@@ -808,12 +808,12 @@ git commit -m "feat(NmeaParser): 解析 \$GPSSHARE，位置改在 RMC 处发布�
     }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*LocationProviderTest"`
 Expected: FAIL —— `toInput(Location, Source)` 这个签名不存在
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 Modify `app/src/main/java/com/gpsbt/transfer/engine/LocationProvider.java`。
 
@@ -884,14 +884,14 @@ listener 里两处 `toInput(location)` 改为带来源：
 ```
 （网络兜底分支）。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*LocationProviderTest"`
 Expected: PASS
 
 若单元测试里 `location.getTime()` 等返回 0（Android 桩不实现真实逻辑），把断言放宽为 `assertTrue(input.utcMillis > 0L)` 并删掉精确值断言 —— 具体以实际运行结果为准，**不要为了让测试通过而删掉实现**。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/engine/LocationProvider.java app/src/test/java/com/gpsbt/transfer/engine/LocationProviderTest.java
@@ -906,7 +906,7 @@ git commit -m "feat(LocationProvider): 采集真实解算时刻、来源与三�
 - Modify: `app/src/main/java/com/gpsbt/transfer/engine/TransmitEngine.java`
 - Modify: `app/src/test/java/com/gpsbt/transfer/engine/TransmitEngineTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `app/src/test/java/com/gpsbt/transfer/engine/TransmitEngineTest.java` 类末尾追加：
 
@@ -992,12 +992,12 @@ git commit -m "feat(LocationProvider): 采集真实解算时刻、来源与三�
     }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*TransmitEngineTest"`
 Expected: FAIL —— `tick` / `tickKeepalive` 签名不匹配，`publish` 语义不同
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 Modify `app/src/main/java/com/gpsbt/transfer/engine/TransmitEngine.java` —— 整体替换为：
 
@@ -1174,14 +1174,14 @@ public final class TransmitEngine {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*TransmitEngineTest"`
 Expected: PASS
 
 旧的 `TransmitEngineTest` 用例会因签名变化编译失败 —— 按新签名改写：`tick(now)` → `tick(now, nowElapsed)`；「时间取自当前时钟」那条改成断言「时间取自解算时刻」。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/engine/TransmitEngine.java app/src/test/java/com/gpsbt/transfer/engine/TransmitEngineTest.java
@@ -1197,12 +1197,12 @@ git commit -m "feat(TransmitEngine): 改为队列 + 事件驱动，保活帧带�
 
 **这一步没有独立单测**（Service 依赖 Android 运行时），靠 Task 14 的全量测试与真机验收覆盖。改动前先跑一次全量测试确认基线是绿的。
 
-- [ ] **Step 1: 确认基线绿**
+- [x] **Step 1: 确认基线绿**
 
 Run: `./gradlew :app:testDebugUnitTest --offline`
 Expected: BUILD SUCCESSFUL（Task 1–5 的改动已合入）
 
-- [ ] **Step 2: 替换调度器**
+- [x] **Step 2: 替换调度器**
 
 把 `GpsOutputService` 里与「定频 tick」相关的成员替换掉：
 
@@ -1220,7 +1220,7 @@ Expected: BUILD SUCCESSFUL（Task 1–5 的改动已合入）
     private volatile long lastPositionAt;
 ```
 
-- [ ] **Step 3: 替换调度器的启动与停止**
+- [x] **Step 3: 替换调度器的启动与停止**
 
 `startScheduler(int rateHz)` 整个方法替换为：
 
@@ -1261,7 +1261,7 @@ Expected: BUILD SUCCESSFUL（Task 1–5 的改动已合入）
 
 同时把 `startTransmission()` 里的调用点 `startScheduler(prefs.getRateHz());` 改成 `startScheduler();`。
 
-- [ ] **Step 4: 替换 tickInternal 为事件驱动的发送**
+- [x] **Step 4: 替换 tickInternal 为事件驱动的发送**
 
 把 `tickInternal()` 整个方法替换为下面三个方法：
 
@@ -1400,7 +1400,7 @@ Expected: BUILD SUCCESSFUL（Task 1–5 的改动已合入）
 import android.os.SystemClock;
 ```
 
-- [ ] **Step 5: 改造 onFix：去重 + 编号 + 立即发送**
+- [x] **Step 5: 改造 onFix：去重 + 编号 + 立即发送**
 
 把 `locationCallback.onFix` 改成：
 ```java
@@ -1446,7 +1446,7 @@ import android.os.SystemClock;
         }
 ```
 
-- [ ] **Step 6: 编译并跑全量测试**
+- [x] **Step 6: 编译并跑全量测试**
 
 Run: `./gradlew :app:testDebugUnitTest --offline`
 Expected: BUILD SUCCESSFUL
@@ -1460,7 +1460,7 @@ Expected: BUILD SUCCESSFUL
 
 Task 10 会把它们连同 UI 一起补完整。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/service/GpsOutputService.java app/src/main/java/com/gpsbt/transfer/state/TransmitterState.java
@@ -1477,7 +1477,7 @@ git commit -m "feat(GpsOutputService): 新解即发，去重并编号，保活�
 - Create: `app/src/main/java/com/gpsbt/transfer/rx/InjectionPolicy.java`
 - Create: `app/src/test/java/com/gpsbt/transfer/rx/InjectionPolicyTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create `app/src/test/java/com/gpsbt/transfer/rx/InjectionPolicyTest.java`:
 
@@ -1603,12 +1603,12 @@ public class InjectionPolicyTest {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*InjectionPolicyTest"`
 Expected: FAIL —— 找不到类 `InjectionPolicy`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 Create `app/src/main/java/com/gpsbt/transfer/rx/InjectionPolicy.java`:
 
@@ -1750,12 +1750,12 @@ public final class InjectionPolicy {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `./gradlew :app:testDebugUnitTest --offline --tests "*InjectionPolicyTest"`
 Expected: PASS，11 个用例全过
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/rx/InjectionPolicy.java app/src/test/java/com/gpsbt/transfer/rx/InjectionPolicyTest.java
@@ -1769,7 +1769,7 @@ git commit -m "feat(InjectionPolicy): 注入判据与时间重锚的纯逻辑实
 **Files:**
 - Modify: `app/src/main/java/com/gpsbt/transfer/rx/MockLocationInjector.java`
 
-- [ ] **Step 1: 改造 inject 方法**
+- [x] **Step 1: 改造 inject 方法**
 
 Modify `app/src/main/java/com/gpsbt/transfer/rx/MockLocationInjector.java`。
 
@@ -1856,12 +1856,12 @@ Modify `app/src/main/java/com/gpsbt/transfer/rx/MockLocationInjector.java`。
     }
 ```
 
-- [ ] **Step 2: 编译并跑全量测试**
+- [x] **Step 2: 编译并跑全量测试**
 
 Run: `./gradlew :app:testDebugUnitTest --offline`
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/rx/MockLocationInjector.java
@@ -1875,7 +1875,7 @@ git commit -m "feat(MockLocationInjector): 判据交给 InjectionPolicy，时间
 **Files:**
 - Modify: `app/src/main/java/com/gpsbt/transfer/service/ReceiveService.java`
 
-- [ ] **Step 1: 接线失败监听**
+- [x] **Step 1: 接线失败监听**
 
 在 `ReceiveService` 的字段区加：
 
@@ -1898,7 +1898,7 @@ git commit -m "feat(MockLocationInjector): 判据交给 InjectionPolicy，时间
             injector.setFailureListener(injectionFailureListener);
 ```
 
-- [ ] **Step 2: 改造 onLocation 回调**
+- [x] **Step 2: 改造 onLocation 回调**
 
 把 `ReceiveService` 里 `callback.onLocation` 的方法体改成：
 
@@ -1948,7 +1948,7 @@ git commit -m "feat(MockLocationInjector): 判据交给 InjectionPolicy，时间
         }
 ```
 
-- [ ] **Step 3: 断链时清掉注入记忆**
+- [x] **Step 3: 断链时清掉注入记忆**
 
 在 `ReceiveService` 的 `onConnectionChanged` 里，`connected == false` 的分支补一行：
 
@@ -1969,12 +1969,12 @@ git commit -m "feat(MockLocationInjector): 判据交给 InjectionPolicy，时间
     }
 ```
 
-- [ ] **Step 4: 编译并跑全量测试**
+- [x] **Step 4: 编译并跑全量测试**
 
 Run: `./gradlew :app:testDebugUnitTest --offline`
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/service/ReceiveService.java app/src/main/java/com/gpsbt/transfer/rx/MockLocationInjector.java
@@ -1993,7 +1993,7 @@ git commit -m "feat(ReceiveService): 接收端记录来源与延迟，注入连�
 - Modify: `app/src/main/java/com/gpsbt/transfer/ui/fragment/HomeFragment.java`
 - Modify: `app/src/main/res/values/strings.xml`
 
-- [ ] **Step 1: `TransmitterState.Fix` 补字段**
+- [x] **Step 1: `TransmitterState.Fix` 补字段**
 
 把 `Fix` 类里的字段补齐（Task 6 可能已临时加过，这里统一成正式形态）：
 
@@ -2004,7 +2004,7 @@ git commit -m "feat(ReceiveService): 接收端记录来源与延迟，注入连�
         public volatile long ageMillis = -1L;
 ```
 
-- [ ] **Step 2: `StatsGridBuilder` 加两张卡**
+- [x] **Step 2: `StatsGridBuilder` 加两张卡**
 
 在 `StatsGridBuilder` 的常量区加：
 
@@ -2027,7 +2027,7 @@ git commit -m "feat(ReceiveService): 接收端记录来源与延迟，注入连�
 
 > 注意：卡片总数是奇数会让 GridLayout 末尾留一格空位。`KEY_ACCURACY` 之后插两张，正好补成偶数。
 
-- [ ] **Step 3: 加字符串资源**
+- [x] **Step 3: 加字符串资源**
 
 在 `app/src/main/res/values/strings.xml` 加：
 
@@ -2041,7 +2041,7 @@ git commit -m "feat(ReceiveService): 接收端记录来源与延迟，注入连�
     <string name="receive_inject_failed">定位注入失败，请检查开发者选项里的模拟位置授权</string>
 ```
 
-- [ ] **Step 4: `HomeFragment` 渲染新卡片**
+- [x] **Step 4: `HomeFragment` 渲染新卡片**
 
 在 `HomeFragment` 的卡片渲染处（`set(StatsGridBuilder.KEY_ACCURACY, ...)` 之后）插入：
 
@@ -2083,12 +2083,12 @@ git commit -m "feat(ReceiveService): 接收端记录来源与延迟，注入连�
     }
 ```
 
-- [ ] **Step 5: 编译并跑全量测试**
+- [x] **Step 5: 编译并跑全量测试**
 
 Run: `./gradlew :app:testDebugUnitTest --offline`
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add app/src/main/java/com/gpsbt/transfer/ui/fragment/StatsGridBuilder.java app/src/main/java/com/gpsbt/transfer/state/TransmitterState.java app/src/main/java/com/gpsbt/transfer/ui/fragment/HomeFragment.java app/src/main/res/values/strings.xml
@@ -2103,7 +2103,7 @@ git commit -m "feat(ui): 新增「数据来源」与「定位延迟」卡片"
 - Modify: `app/src/main/res/values/strings.xml`
 - Modify: `app/src/main/java/com/gpsbt/transfer/ui/fragment/SettingsFragment.java`
 
-- [ ] **Step 1: 改文案**
+- [x] **Step 1: 改文案**
 
 `strings.xml` 里把：
 
@@ -2118,7 +2118,7 @@ git commit -m "feat(ui): 新增「数据来源」与「定位延迟」卡片"
     <string name="settings_rate_hint">向手机请求定位的频率。GPS 芯片通常只按 1 Hz 出解，实际收到的定位以设备为准。</string>
 ```
 
-- [ ] **Step 2: 显示实际速率**
+- [x] **Step 2: 显示实际速率**
 
 `SettingsFragment` 的频率滑块监听器（`rateSlider.addOnChangeListener`）里，在 `prefs.setRateHz(hz)` 之后补一行，把实际收到的定位速率显示出来：
 
@@ -2151,7 +2151,7 @@ git commit -m "feat(ui): 新增「数据来源」与「定位延迟」卡片"
     }
 ```
 
-- [ ] **Step 3: 布局里加「实际速率」那一行**
+- [x] **Step 3: 布局里加「实际速率」那一行**
 
 在 `app/src/main/res/layout/fragment_settings.xml` 里，频率滑块所在的那一项下面加一个 `TextView`：
 
@@ -2172,12 +2172,12 @@ git commit -m "feat(ui): 新增「数据来源」与「定位延迟」卡片"
     <string name="settings_rate_actual_unknown">实际收到定位：--</string>
 ```
 
-- [ ] **Step 4: 编译并跑全量测试**
+- [x] **Step 4: 编译并跑全量测试**
 
 Run: `./gradlew :app:testDebugUnitTest --offline`
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add app/src/main/res/values/strings.xml app/src/main/res/layout/fragment_settings.xml app/src/main/java/com/gpsbt/transfer/ui/fragment/SettingsFragment.java
@@ -2195,7 +2195,7 @@ git commit -m "feat(ui): 频率项改名为「定位请求频率」并显示实�
 - Modify: `docs/USAGE.md`
 - Modify: `docs/使用教程.md`
 
-- [ ] **Step 1: README 更新协议与兼容性说明**
+- [x] **Step 1: README 更新协议与兼容性说明**
 
 在 README 的功能表里补两行：
 
@@ -2217,7 +2217,7 @@ git commit -m "feat(ui): 频率项改名为「定位请求频率」并显示实�
 想要完整效果，**发送端与接收端都要升级到 2.0.0**。
 ```
 
-- [ ] **Step 2: 使用教程同步**
+- [x] **Step 2: 使用教程同步**
 
 在 `docs/USAGE.md` 与 `docs/使用教程.md` 里补一节：
 
@@ -2231,7 +2231,7 @@ git commit -m "feat(ui): 频率项改名为「定位请求频率」并显示实�
 - 「数据来源」显示「网络定位」时，发送端已经切到 WiFi/基站定位了，精度会明显变差（卡片里的「定位精度」会如实显示几十到几百米）。
 ```
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add README.md docs/USAGE.md docs/使用教程.md
@@ -2244,29 +2244,29 @@ git commit -m "docs: 补充 v2.0.0 的协议、兼容性说明与「定位延迟
 
 **Files:** 无（只验证）
 
-- [ ] **Step 1: 跑全部单测**
+- [x] **Step 1: 跑全部单测**
 
 Run: `./gradlew :app:testDebugUnitTest --offline`
 Expected: BUILD SUCCESSFUL，且用例数从 119 增加到 150 以上
 
-- [ ] **Step 2: 出 release 包**
+- [x] **Step 2: 出 release 包**
 
 Run: `./gradlew :app:assembleRelease --offline`
 Expected: BUILD SUCCESSFUL
 
 产物在 `构建目录/GpsShare2/app/outputs/apk/release/`（构建目录被 `local.properties` 的 `build.dir` 重定向过）。
 
-- [ ] **Step 3: 确认版本号与签名**
+- [x] **Step 3: 确认版本号与签名**
 
 Run: `aapt dump badging <apk> | head -3`（若 `aapt` 不可用，用 Android Studio 的 Build 面板查看）
 Expected: `package: name='com.gpsshare' versionCode='28' versionName='2.0.0'`
 
-- [ ] **Step 4: 确认老仓库未受影响**
+- [x] **Step 4: 确认老仓库未受影响**
 
 Run: `git -C "工作区根目录/GPS共享" status --short && git -C "工作区根目录/GPS蓝牙传输" status --short`
 Expected: 两个命令都**没有任何输出**（老版本一个字节都没动）
 
-- [ ] **Step 5: 提交（若构建脚本有改动）**
+- [x] **Step 5: 提交（若构建脚本有改动）**
 
 ```bash
 git status --short
@@ -2302,3 +2302,32 @@ git status --short
 | GGA 使用卫星数去掉 `Math.max(1, …)` | **保留** | 那不是谎报，是防 `GnssStatus` 记账短暂为 0 的防御；报 0 会让第三方工具直接忽略整帧 |
 | `nmea/NmeaSentenceType.java` 新增 `GPSSHARE` 枚举值 | **不改这个文件** | `NmeaSentenceType` 是「用户可开关的语句」清单，而 `$GPSSHARE` 必须**永远发送**（它是元数据，不是可选语句）。加进枚举反而会多出一个可以关掉的开关 |
 | `util/Prefs.java` 改频率项语义 | **不改这个文件** | 频率偏好的**键和值都没变**，它控制的本来就是 `requestLocationUpdates` 的 `minTime`。要改的只是设置页的**文案**（Task 11）与旁边的说明 |
+
+---
+
+## 附二：实施偏离记录（相对本计划）
+
+本计划里的代码片段是**实施前的设想**，与最终代码有出入的地方一并记在这里。
+以代码与提交记录为准。
+
+| 计划原文 | 实际实现 | 原因 |
+|---|---|---|
+| `gpsShare(NmeaInput in, long seq, long ageMillis)`（三参） | `gpsShare(NmeaInput in, long ageMillis)`（两参，序号取 `in.seq`） | 两个真相源会静默分叉，而 SEQ 是接收端的去重键。Task 2 的 review 已定此形 |
+| `keepaliveFrame(null, …)` 发一个 `$GPSSHARE` 空壳 | 只发 `$GPZDA` | `AGE=0` 在接收端正是「把时间戳重锚到本机此刻」的信号，会把「从来没有过定位」表达成「一个 0 毫秒前刚解算出来的定位」；`SEQ=0` 还会把去重计数器倒回 0 |
+| 精度取整用 `Math.round(value * 10f) / 10f` | 先判非有限，再用 `double` 取整 | `float` 的 `value*10` 会先溢出成 Infinity，`Math.round` 再饱和成 `Integer.MAX_VALUE`，印出「214748364.7」——比真值小了四个数量级 |
+| `InjectionPolicy.Decision` 只有 5 档 | 增加 `SATELLITES_ONLY` | 卫星快照与位置快照是**同一个解算**，身份相同。若让卫星快照先占住身份，随后到达的位置快照会被判成重复 —— 用户关掉 RMC 语句时位置将永远注入不了 |
+| 越界校验只查纬度/经度/精度/年龄 | 另外把**精度为 0** 也算异常 | 没有哪台设备真能精确到 0 米，0 是谎报；但精度**未知**（NaN）不算非法 |
+| `payloadOf` 直接算 `nowElapsed − age` | 拿不到本机 uptime 时留 0 | 负的 uptime 会让平台算出的年龄变成负数，比不设还糟 |
+| Task 4：`toInput` 直接读 Android `Location` | 元信息映射抽成纯逻辑的 `applyFixMetadata` | 单测里的 `android.location.Location` 是空壳桩，`getTime()` 恒为 0，直接断言等于什么也没测 |
+| Task 5/6 分两个任务 | 合并为一个提交 | 新引擎的公开 API 一变，`GpsOutputService` 的调用点就编译不过；拆成两个提交只能造出一个「队列化但仍定频 tick」的半成品状态 |
+| Task 10：过期秒数靠界面刷新时顺带更新 | 加 1 秒定时器单独刷这张卡 | 界面平时只在收到新数据时才重画，数据断流时恰好不刷新，过期秒数会永远停在那一帧上 |
+| Task 11：实际速率用「1000 ÷ 距上次到达」 | 用 `FixRateMeter` 的滑动窗口测量 | 前者在两次定位之间从 0 跳到 1 秒再跳回来，数字一直在跳；窗口法是真实速率 |
+| Task 11：实际速率在服务里算 | 同左，但测量器独立成可单测的纯逻辑类 | 与 `InjectionPolicy` 同一原则：能单测的逻辑不要埋在 Service 里 |
+
+### 与计划相关的结论修正
+
+- 设计文档 §9 原本写「2.0.0 接收端对 1.6.2 的数据会注入两次」。实施后不成立：
+  位置发布点改到 RMC、删掉了 GGA 处的 leftover、GSV 的卫星快照不再触发注入，
+  现在**每周期只注入一次**。已在设计文档中就地标注修正。
+- 单元测试从 119 个增加到 **189** 个（新增 `$GPSSHARE` 协议、注入判据、
+  时间重锚、速率测量等用例）。

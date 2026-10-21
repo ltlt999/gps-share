@@ -53,14 +53,16 @@
 | 服务发现 | 发送端每秒广播 UDP 信标，接收端自动列出可用发送端，免手输 IP |
 | 接收端 | **蓝牙或 WiFi 二选一**，解析 NMEA 并通过「模拟位置」注入系统定位，导航 App 直接可用 |
 | 标准 NMEA 输出 / 解析 | `$GPGGA` / `$GPRMC` / `$GPGSA` / `$GPGSV` / `$GPVTG` / `$GPZDA`，含 XOR 校验和，`\r\n` 结尾 |
+| 定位元数据透传 | 新增 `$GPSSHARE` 语句，携带**米制精度**（水平/垂直/速度/航向）、**解算年龄**与**数据来源**；接收端按年龄在**本机时钟**上重锚时间，两台手机时钟不同步也不受影响 |
+| 事件驱动发送 | 定位一到立刻发帧（不再等定频时钟），端到端延迟只取决于链路本身 |
 | 按星座分组发送 | GSV 按卫星系统分组（`$GP`/`$BD`/`$GL`/`$GA`/`$GI` talker），接收端可准确区分 GPS/北斗/GLONASS/Galileo |
-| 发送频率可调 | 1–10 Hz，滑块实时调节 |
-| 无定位保活 | 无定位时每秒发一帧 `$GPZDA` 时间帧，链路始终有数据流动，断链 1 秒内暴露 |
+| 定位请求频率可调 | 1–10 Hz，滑块实时调节；旁边显示「实际收到定位：X 次/秒」——GPS 芯片通常只按 1 Hz 出解，以设备实际为准 |
+| 无定位保活 | 每秒发一帧保活帧（`$GPSSHARE` + `$GPZDA`），链路始终有数据流动，断链 1 秒内暴露；接收端据此知道「多久没有新定位了」 |
 | GPS 优先 / 网络兜底 | 「允许网络定位」开启时：GPS 正常只用 GPS；连续 10 秒无 GPS 定位自动切 WiFi/基站兜底，恢复后自动切回 |
 | 断线自动恢复 | 发送端断线后回到监听等待重连；接收端每 5 秒自动重连 |
 | 重复启动防护 | 重复的启动请求会先清理旧流水线，避免两个监听服务并存导致「两端已连接但收不到数据」 |
 | 后台持续运行 | 前台服务 + 常驻通知，切后台/锁屏仍工作，通知内可一键停止 |
-| 实时运行数据 | 定位状态、卫星数、经纬度、速度、航向、海拔、**定位精度**、已发语句、速率、**数据量（KB/MB）**、**在线时长**，以及**占满整行的连接设备卡**（WiFi 多台时逐行列出各自 IP）；接收角色下自动切换为「已接收条数 / 接收速率 / 已接收数据量」 |
+| 实时运行数据 | 定位状态、卫星数、经纬度、速度、航向、海拔、**定位精度**、**数据来源**、**定位延迟**、已发语句、速率、**数据量（KB/MB）**、**在线时长**，以及**占满整行的连接设备卡**（WiFi 多台时逐行列出各自 IP）；接收角色下自动切换为「已接收条数 / 接收速率 / 已接收数据量」 |
 | 卫星星图 | 天空雷达（方位/仰角/信噪比）+ 明细列表，每颗星带**所属星座的国旗**（GPS🇺🇸 / 北斗🇨🇳 / GLONASS🇷🇺 / Galileo🇪🇺 / QZSS🇯🇵 / NavIC🇮🇳）。明细有**表头说明**、按**在用优先、信噪比降序**排列，可一键「只看有信号的」 |
 | 运行日志 | 实时日志，支持复制、清空、导出；按「普通 / 卫星 / 数据 / 全部」分类筛选。**收发两端对称**：发送端记发出去的语句，接收端记收到的 |
 | 最低兼容 Android 7.0 | minSdk 24，覆盖绝大多数在用设备 |
@@ -84,6 +86,19 @@
 - 本应用自己的「卫星」页在接收端仍能正常显示——数据来自解析的 `GSV` 语句，不依赖系统。
 
 **应用无法自己打开带流量共享的热点**（系统限制）：共享角色下需要你手动在「系统设置 → 个人热点」里打开热点，应用会把检测到的热点地址显示在界面上。
+
+---
+
+## 与 1.6.2 的兼容性
+
+2.0.0 与 1.6.2 **混用不会崩，只是拿不到改进**：
+
+- **2.0.0 发送 → 1.6.2 接收**：旧接收端忽略 `$GPSSHARE`，照旧按 HDOP×5 解析，位置正常，精度仍被截断到 49.5 m。
+- **1.6.2 发送 → 2.0.0 接收**：缺 `$GPSSHARE` → 退回旧行为，位置正常，精度仍截断、「数据来源」显示「未知」、「定位延迟」按到达时间估算。
+
+想要完整效果，**发送端与接收端都要升级到 2.0.0**。
+
+> 顺带一提：1.6.2 的接收端每周期会注入**两次**（一次是上一周期的旧位置），2.0.0 修掉了这个 —— 现在每周期只注入一次，且只有当帧带 RMC 时才注入（否则位置会拖到下一帧开头，宁可晚 1 秒也要给完整的一份数据）。
 
 ---
 
@@ -163,13 +178,17 @@ adb install -r 构建目录/app/outputs/apk/debug/app-debug.apk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest
 ```
 
-覆盖范围（119 个用例）：
+覆盖范围（189 个用例）：
 
 - `NmeaChecksumTest`：XOR 校验和算法（含两个标准样例 `*47` / `*6A`）、两位十六进制补零、`\r\n` 结尾
-- `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关
-- `NmeaParserTest`：**与生成器互为逆运算的往返测试**、半球正负、校验和错误丢弃、GSV 分轮不累积、GSA 标记已用卫星
-- `TransmitEngineTest`：定频写入、时间取自当前时钟、无定位/过期降级、计数器与速率
+- `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关、`$GPSSHARE` 的 golden 字符串与精度取值规则（非有限值与取整归零一律省略整个键）
+- `NmeaInputTest`：元信息字段拷贝、年龄计算（优先 uptime、墙上时钟兜底、倒流防护）
+- `NmeaParserTest`：**与生成器互为逆运算的往返测试**、半球正负、校验和错误丢弃、GSV 分轮不累积、GSA 标记已用卫星、`$GPSSHARE` 元信息解析、精度择优、位置在 RMC 处发布且只发布一次
+- `InjectionPolicyTest`：注入判据（重复/无效/过期/越界）、身份判定（序号优先、位置兜底、发送端重启可接受）、时间双时钟重锚、精度如实传递
+- `TransmitEngineTest`：队列保序不丢帧、同一解算只发一次、帧内时间是解算时刻、年龄计算、保活帧元数据与递增的年龄
 - `TransmitterStateTest`：观察者通知、注销后不再通知、多对端增删、默认状态
+- `LocationProviderTest`：网络兜底决策边界、解算时刻与三维精度采集、API 26 以下的版本守卫
+- `FixRateMeterTest`：定位到达速率的窗口测量（1 Hz / 2 Hz / 重复投递去重 / 窗口有界）
 - `PeerTest`：对端相等性只按地址、null 归一化
 - `PeerRegistryTest`：多对端广播、单个对端写失败静默剔除且不影响其余、非受检异常同样被隔离
 - `DiscoveryBeaconTest`：信标编解码往返、中文/分隔符转义、非法报文丢弃
@@ -230,12 +249,13 @@ app/src/main/java/com/gpsbt/transfer/
 │   ├── ReceiveLink.java           接收通道抽象（TCP / 蓝牙两种实现）
 │   ├── NmeaClient.java            WiFi：TCP 客户端 + 多地址轮换重连
 │   ├── BluetoothNmeaClient.java   蓝牙：RFCOMM 客户端 + 重连
-│   ├── NmeaParser.java            NMEA → 定位快照（与生成器互逆）
-│   └── MockLocationInjector.java  注入系统模拟位置
+│   ├── NmeaParser.java            NMEA → 定位快照（帧累加器，与生成器互逆）
+│   ├── InjectionPolicy.java       注入判据与时间重锚（纯逻辑，可单测）
+│   └── MockLocationInjector.java  注入系统模拟位置（Android 胶水层）
 ├── service/
 │   ├── GpsOutputService.java      共享端前台服务
 │   └── ReceiveService.java        接收端前台服务
-├── engine/TransmitEngine.java     定频发送与统计（纯逻辑，可单测）
+├── engine/TransmitEngine.java     队列化发送与统计（纯逻辑，可单测）
 ├── engine/LocationProvider.java   LocationManager / GnssStatus 封装
 ├── nmea/                          NMEA 生成与解析基础（无 Android 依赖）
 ├── state/                         TransmitterState 状态中心 / TransmitStats / LogBus / NmeaLog
@@ -244,7 +264,7 @@ app/src/main/java/com/gpsbt/transfer/
 ├── ui/fragment/                   Home / Satellite / Log / Settings
 ├── ui/view/                       PulseButtonView / SatelliteRadarView / StatCardView
 ├── ui/adapter/                    设备 / 卫星 / 日志 / 对端 / 服务器列表
-└── util/                          Prefs / Formatters / LogExporter
+└── util/                          Prefs / Formatters / LogExporter / FixRateMeter
 ```
 
 ## 真机调试
@@ -269,3 +289,4 @@ app/src/main/java/com/gpsbt/transfer/
 - P1（骨架 + 传输层抽象）：[docs/superpowers/plans/2026-10-12-gps-share-p1-link-abstraction.md](docs/superpowers/plans/2026-10-12-gps-share-p1-link-abstraction.md)
 - P2（WiFi 发送端）：[docs/superpowers/plans/2026-10-13-gps-share-p2-wifi-sender.md](docs/superpowers/plans/2026-10-13-gps-share-p2-wifi-sender.md)
 - P3（接收端）：[docs/superpowers/plans/2026-10-13-gps-share-p3-receiver.md](docs/superpowers/plans/2026-10-13-gps-share-p3-receiver.md)
+- v2.0.0 定位保真改造：设计 [spec](docs/superpowers/specs/2026-10-22-gps-share-v2-fidelity-design.md) · 计划 [plan](docs/superpowers/plans/2026-10-22-gps-share-v2-fidelity.md)
