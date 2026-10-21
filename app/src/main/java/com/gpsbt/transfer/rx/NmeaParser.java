@@ -55,6 +55,9 @@ public final class NmeaParser {
      * GSV 覆盖，所以 UI 最终显示的是正确数字。
      */
     private boolean hasFix;
+    /** 本周期累计收到的线上字节（含 
+ 与校验和）。 */
+    private long wireBytes;
 
     /** 清空累积状态（断线重连时调用）。 */
     public void reset() {
@@ -71,6 +74,7 @@ public final class NmeaParser {
         entries.clear();
         usedPrns.clear();
         hasFix = false;
+        wireBytes = 0L;
     }
 
     /**
@@ -111,24 +115,29 @@ public final class NmeaParser {
             NmeaInput leftover = publishIfHasFix();
             entries.clear();
             usedPrns.clear();
+            wireBytes = 0L;
+            wireBytes += text.length() + 2;
             if (applyGga(f)) {
                 hasFix = true;
             }
             return leftover;
         }
         if ("RMC".equals(type)) {
+            wireBytes += text.length() + 2;
             if (applyRmc(f)) {
                 hasFix = true;
             }
             return null;
         }
         if ("GSA".equals(type)) {
+            wireBytes += text.length() + 2;
             applyGsa(f);
             return null;
         }
         if ("GSV".equals(type)) {
             // 不在这里清 entries：多星座的 GSV 是按 talker 分组的，每组
             // 都有自己的 page 1，若按 page<=1 清会把前一个星座的累积数据全清掉。
+            wireBytes += text.length() + 2;
             applyGsv(f);
             // GSV 到了：连同当前累积的卫星列表一起发布。多星座多页会发布多次，
             // 最后一次携带完整卫星列表——把中间值覆盖掉。
@@ -143,6 +152,7 @@ public final class NmeaParser {
             return null;
         }
         NmeaInput snap = state.copy();
+        snap.wireBytes = wireBytes;
         snap.clearSats();
         for (SatEntry entry : entries) {
             snap.addSat(new NmeaInput.Sat(entry.prn, entry.elevation, entry.azimuth,

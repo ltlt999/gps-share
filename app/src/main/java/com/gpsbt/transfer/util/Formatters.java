@@ -48,6 +48,18 @@ public final class Formatters {
     }
 
     /** 时长格式化为 HH:mm:ss，负数返回 --。 */
+    /** 字节量 → 人类可读（B / KB / MB），超过 1 MB 保留一位小数。 */
+    public static String bytes(long value) {
+        if (value < 1024L) {
+            return value + " B";
+        }
+        double kb = value / 1024.0d;
+        if (kb < 1024.0d) {
+            return String.format(Locale.US, "%.1f KB", kb);
+        }
+        return String.format(Locale.US, "%.1f MB", kb / 1024.0d);
+    }
+
     public static String duration(long millis) {
         if (millis < 0) {
             return "--";

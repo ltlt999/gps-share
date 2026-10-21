@@ -16,6 +16,11 @@ public final class NmeaInput {
     public double bearingDeg;
     public float accuracyM = Float.NaN;
     public int satellitesUsed;
+    /**
+     * 这份快照对应的线上字节数（本周期实际收到的 NMEA 字节）。
+     * 接收端用它统计数据量；0 表示未知（比如快照是程序内部构造的）。
+     */
+    public transient long wireBytes;
 
     private final List<Sat> satellites = new ArrayList<>();
 
@@ -71,6 +76,7 @@ public final class NmeaInput {
         copy.bearingDeg = bearingDeg;
         copy.accuracyM = accuracyM;
         copy.satellitesUsed = satellitesUsed;
+        copy.wireBytes = wireBytes;
         for (Sat sat : satellites) {
             copy.addSat(sat);
         }

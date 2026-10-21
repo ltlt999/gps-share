@@ -620,6 +620,7 @@ public class GpsOutputService extends Service {
             // 毛病——通知读的是 engine.sentences()，卡片读的是 stats.sentences，
             // 两个计数器只有前者被更新过）。
             stats.sentences = current.sentences();
+            stats.bytes = current.bytes();
         } catch (IOException e) {
             LogBus.get().log(LogBus.Level.ERROR, "发送失败：" + e.getMessage());
             if (mode == ConnectionMode.SERVER) {

@@ -167,6 +167,8 @@
     <string name="settings_location_denied">未授权位置信息（点下方按钮去授权）</string>
     <string name="settings_location_upgrade">请求精确位置</string>
     <string name="stat_accuracy">定位精度</string>
+    <string name="stat_bytes">已发送数据量</string>
+    <string name="stat_bytes_received">已接收数据量</string>
     <string name="settings_location_live">实时读数：已定位，精度 %1$s</string>
     <string name="settings_location_live_stale">实时读数：暂无定位（点「开始传输」后，这里会显示当前定位情况）</string>
     <string name="stat_accuracy_value">± %1$s m</string>

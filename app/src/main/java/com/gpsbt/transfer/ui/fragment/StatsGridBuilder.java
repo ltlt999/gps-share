@@ -24,6 +24,7 @@ final class StatsGridBuilder {
     static final String KEY_DEVICE = "device";
     static final String KEY_UPTIME = "uptime";
     static final String KEY_ACCURACY = "accuracy";
+    static final String KEY_BYTES = "bytes";
 
     private StatsGridBuilder() {
     }
@@ -65,6 +66,11 @@ final class StatsGridBuilder {
         add(grid, target, KEY_SENTENCES,
                 receive ? R.string.stat_received : R.string.stat_sentences,
                 R.drawable.ic_stat_send, "0", 1);
+        // 数据量：真实字节数。链路看着连着但这个数不动 = 假连接；
+        // 稳定增长 = 真在干活。发送端与接收端对称，只是量的方向相反
+        add(grid, target, KEY_BYTES,
+                receive ? R.string.stat_bytes_received : R.string.stat_bytes,
+                R.drawable.ic_stat_send, "0 B", 1);
         // 两个角色都有速率卡，只是量的是不同的东西：发送端发出去的语句，
         // 接收端收进来的定位。少了它半宽卡片会变成奇数张，末尾留空一格。
         add(grid, target, KEY_RATE,

@@ -413,6 +413,7 @@ public class ReceiveService extends Service {
                 return;
             }
             stats.sentences++;
+            stats.bytes += location.wireBytes;
             updateReceiveRate(System.currentTimeMillis());
             if (injector != null) {
                 injector.inject(location);

@@ -650,6 +650,8 @@ public class HomeFragment extends Fragment
                         String.format(Locale.US, "%.0f", fix.accuracyM)));
         set(StatsGridBuilder.KEY_SENTENCES,
                 String.valueOf(running ? snapshot.stats().sentences : 0));
+        set(StatsGridBuilder.KEY_BYTES, Formatters.bytes(
+                running ? snapshot.stats().bytes : 0L));
         // 两个角色都有速率卡，但量的是不同的东西，单位也不同
         set(StatsGridBuilder.KEY_RATE, String.format(Locale.US, "%.1f %s",
                 running ? snapshot.stats().rateHz : 0d,
