@@ -65,6 +65,10 @@ public final class TransmitterState {
         public volatile double bearingDeg;
         public volatile float accuracyM = Float.NaN;
         public volatile long fixAt;
+        /** 数据来源的线上拼写：GPS / NET / NONE。 */
+        public volatile String source = "";
+        /** 本次解算的年龄（毫秒）；-1 = 还没算出来。 */
+        public volatile long ageMillis = -1L;
     }
 
     public interface Listener {

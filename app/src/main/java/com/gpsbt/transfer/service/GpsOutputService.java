@@ -13,6 +13,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
@@ -83,8 +84,15 @@ public class GpsOutputService extends Service {
     /** 当前链路是按什么配置建的；用来拦住重复的启动请求，避免拆掉正在跑的连接。 */
     private volatile String runningConfig = "";
 
-    private ScheduledExecutorService scheduler;
-    private ScheduledFuture<?> future;
+    private ScheduledExecutorService sendExecutor;
+    private ScheduledFuture<?> keepaliveFuture;
+    /** 发送任务是否已在队列里：避免连续多个解算投递出多个任务。 */
+    private final java.util.concurrent.atomic.AtomicBoolean sendScheduled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** 解算序号：每次真正的新解算 +1。 */
+    private volatile long fixSeq;
+    /** 上一次发出过的解算时刻：用来识别「同一个解算被重复投递」。 */
+    private volatile long lastFixTimeMillis;
     private ScheduledExecutorService relinkExecutor;
     private long lastNotificationAt;
 
@@ -413,7 +421,7 @@ public class GpsOutputService extends Service {
         locationProvider.start(prefs.isAllowNetwork(), 1000 / Math.max(1, prefs.getRateHz()),
                 locationCallback);
 
-        startScheduler(prefs.getRateHz());
+        startScheduler();
         if (!connectLink(adapter)) {
             return false;
         }
@@ -542,31 +550,127 @@ public class GpsOutputService extends Service {
         }
     }
 
-    private void startScheduler(int rateHz) {
+    /**
+     * 启动发送流水线。
+     *
+     * <p>v2.0.0 起不再定频 tick：定位一到就发（{@link #requestSend()}），
+     * 另有一个 1 秒一次的保活定时器负责「没有新定位时也让链路有数据流动」。
+     *
+     * <p>设置里的「定位请求频率」控制的是向硬件请求定位的间隔
+     * （见 {@link LocationProvider#start}），不再是发帧节奏 —— 发帧节奏由定位本身决定。
+     */
+    private void startScheduler() {
         stopScheduler();
-        final long period = 1000L / Math.max(1, rateHz);
-        scheduler = Executors.newSingleThreadScheduledExecutor();
-        future = scheduler.scheduleWithFixedDelay(new Runnable() {
+        sendExecutor = Executors.newSingleThreadScheduledExecutor();
+        keepaliveFuture = sendExecutor.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                tickInternal();
+                tickKeepalive();
             }
-        }, 0, period, TimeUnit.MILLISECONDS);
+        }, 1, 1, TimeUnit.SECONDS);
     }
 
     private void stopScheduler() {
-        if (future != null) {
-            future.cancel(false);
-            future = null;
+        if (keepaliveFuture != null) {
+            keepaliveFuture.cancel(false);
+            keepaliveFuture = null;
         }
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-            scheduler = null;
+        if (sendExecutor != null) {
+            sendExecutor.shutdownNow();
+            sendExecutor = null;
+        }
+        sendScheduled.set(false);
+    }
+
+    /**
+     * 请求发送一次。定位一到就调。
+     *
+     * <p>投递到发送执行器（单线程）—— 调用方是主线程，绝不能在这里做 socket 写。
+     */
+    private void requestSend() {
+        if (!running) {
+            return;
+        }
+        if (sendScheduled.compareAndSet(false, true)) {
+            ScheduledExecutorService executor = sendExecutor;
+            if (executor == null) {
+                sendScheduled.set(false);
+                return;
+            }
+            try {
+                executor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        drainSends();
+                    }
+                });
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                sendScheduled.set(false);
+            }
         }
     }
 
-    private void tickInternal() {
-        long now = System.currentTimeMillis();
+    /**
+     * 把队列里的解算全部写出去。
+     *
+     * <p>连续多个解算时一个都不能丢 —— 队列先进先出，这里一直取到空为止。
+     */
+    private void drainSends() {
+        try {
+            while (running) {
+                TransmitEngine current = engine;
+                Link currentLink = link;
+                if (current == null || currentLink == null || !currentLink.isConnected()) {
+                    return;
+                }
+                long nowMillis = System.currentTimeMillis();
+                long nowElapsed = SystemClock.elapsedRealtimeNanos();
+                List<String> sentences;
+                try {
+                    sentences = current.tick(nowMillis, nowElapsed);
+                } catch (IOException e) {
+                    handleWriteFailure(e);
+                    return;
+                }
+                if (sentences.isEmpty()) {
+                    // 队列空了（或是解算太旧被丢掉）
+                    if (!current.hasPending()) {
+                        return;
+                    }
+                    continue;
+                }
+                stats.rateHz = current.rateHz(nowMillis);
+                maybeUpdateNotification(nowMillis);
+                for (String sentence : sentences) {
+                    logSentence(sentence);
+                }
+                // 把引擎的计数同步到对外状态。**必须在这里做**：界面与通知都读
+                // stats，不写的话「已发送语句」永远是 0（原版 v1.4.6 就有这个
+                // 毛病——通知读的是 engine.sentences()，卡片读的是 stats.sentences，
+                // 两个计数器只有前者被更新过）。
+                stats.sentences = current.sentences();
+                stats.bytes = current.bytes();
+            }
+        } finally {
+            sendScheduled.set(false);
+            // 收尾竞态：刚清标志位就来了新解算，而它的请求被并进了本次任务
+            TransmitEngine current = engine;
+            if (running && current != null && current.hasPending()) {
+                requestSend();
+            }
+        }
+    }
+
+    /**
+     * 保活定时器：没有新定位时也让链路上有数据流动。
+     *
+     * <p>无条件每秒一发。早期设想是「这一秒没有新解算才发」，但事件驱动下
+     * 「这一秒有没有新解算」是竞态（解算正好卡在定时器边界上），无条件发
+     * 既省掉这个竞态，又给接收端一条连续的心跳。
+     */
+    private void tickKeepalive() {
+        long nowMillis = System.currentTimeMillis();
+        long nowElapsed = SystemClock.elapsedRealtimeNanos();
         // 授权在**运行期间**也可能到期（初始配置期正好在今天结束）。只在启动时查
         // 一次的话，一个跨过到期点的会话会一直跑下去，等于白送。
         if (!prerequisiteSatisfied(this)) {
@@ -580,18 +684,18 @@ public class GpsOutputService extends Service {
         // GPS 冷启动可能要几十秒到几分钟，等不到定位就停会误伤正常使用
         boolean bgBlocked = fromBoot && !uiStarted
                 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
-        if (bgBlocked && !fixReceived && now - startedAt > BG_FIX_TIMEOUT_MS) {
+        if (bgBlocked && !fixReceived && nowMillis - startedAt > BG_FIX_TIMEOUT_MS) {
             LogBus.get().log(LogBus.Level.WARN, "后台启动的服务无法获取定位，降级为一键开始");
             notifyLocationRestricted();
             stopSelfSafely(false);
             return;
         }
-        final TransmitEngine current = engine;
-        final Link currentLink = link;
+        TransmitEngine current = engine;
+        Link currentLink = link;
         if (current == null || currentLink == null || !currentLink.isConnected()) {
             // 每 30 秒提示一次：失败窗口里能看到「发送端没有客户端」，便于定位
-            if (now - linkNotReadyLoggedAt > 30000L) {
-                linkNotReadyLoggedAt = now;
+            if (nowMillis - linkNotReadyLoggedAt > 30000L) {
+                linkNotReadyLoggedAt = nowMillis;
                 LogBus.get().log(LogBus.Level.WARN,
                         linkLabel() + "未就绪，暂停发送（等待接收端连接）");
             }
@@ -599,42 +703,32 @@ public class GpsOutputService extends Service {
         }
         linkNotReadyLoggedAt = 0;
         try {
-            List<String> sentences = current.tick(now);
-            if (!sentences.isEmpty()) {
-                // tick 已通过 Sink 写入蓝牙流，这里只刷新统计与通知
-                stats.rateHz = current.rateHz(now);
-                maybeUpdateNotification(now);
-                for (String sentence : sentences) {
-                    logSentence(sentence);
-                }
-            } else {
-                // 无定位时发 ZDA 保活帧：链路保持有数据流动，
-                // 接收端断开能在 1 秒内被写入失败暴露
-                String keepalive = current.tickKeepalive(now);
-                if (keepalive != null) {
-                    logSentence(keepalive);
-                }
+            String keepalive = current.tickKeepalive(nowMillis, nowElapsed);
+            if (keepalive != null) {
+                logSentence(keepalive);
             }
-            // 把引擎的计数同步到对外状态。**必须在这里做**：界面与通知都读
-            // stats，不写的话「已发送语句」永远是 0（原版 v1.4.6 就有这个
-            // 毛病——通知读的是 engine.sentences()，卡片读的是 stats.sentences，
-            // 两个计数器只有前者被更新过）。
             stats.sentences = current.sentences();
             stats.bytes = current.bytes();
         } catch (IOException e) {
-            LogBus.get().log(LogBus.Level.ERROR, "发送失败：" + e.getMessage());
-            if (mode == ConnectionMode.SERVER) {
-                // 服务器模式：清理死连接，accept 循环仍在等待下一次连接
-                if (currentLink != null) {
-                    currentLink.resetConnection();
-                }
-                state.setPeers(null);
-                state.setBt(TransmitterState.Bt.WAITING);
-                state.setStatusText("蓝牙链路中断，等待接收端重新连接");
-                refreshNotification();
-            } else {
-                scheduleRelink();
+            handleWriteFailure(e);
+        }
+    }
+
+    /** 写失败：服务端模式清理死连接，客户端模式 5 秒后重建链路。 */
+    private void handleWriteFailure(IOException e) {
+        LogBus.get().log(LogBus.Level.ERROR, "发送失败：" + e.getMessage());
+        if (mode == ConnectionMode.SERVER) {
+            // 服务器模式：清理死连接，accept 循环仍在等待下一次连接
+            Link currentLink = link;
+            if (currentLink != null) {
+                currentLink.resetConnection();
             }
+            state.setPeers(null);
+            state.setBt(TransmitterState.Bt.WAITING);
+            state.setStatusText("链路中断，等待接收端重新连接");
+            refreshNotification();
+        } else {
+            scheduleRelink();
         }
     }
 
@@ -649,9 +743,20 @@ public class GpsOutputService extends Service {
             fixReceived = true;
             LocationProvider provider = locationProvider;
             final NmeaInput full = provider == null ? input : provider.withSatellites(input);
-            final TransmitEngine current = engine;
+            // 同一个解算被重复投递（部分 ROM 的常态）不重发，也不占用序号。
+            // 判据是解算时刻：utcMillis 现在装的是 location.getTime()，
+            // 同一个解算重复投递时它是不变的。
+            if (full.utcMillis > 0L && full.utcMillis == lastFixTimeMillis) {
+                return;
+            }
+            lastFixTimeMillis = full.utcMillis;
+            // 序号严格对应「一个新的位置」：接收端靠它判断是不是同一个解算
+            full.seq = ++fixSeq;
+            TransmitEngine current = engine;
             if (current != null) {
-                current.publish(full, System.currentTimeMillis());
+                current.publish(full);
+                // 新解即发：不再等下一个定频 tick，那段 0～1000 ms 的等待是白白延迟
+                requestSend();
             }
 
             TransmitterState.Fix fix = new TransmitterState.Fix();
@@ -664,6 +769,11 @@ public class GpsOutputService extends Service {
             fix.speedMps = full.speedMps;
             fix.bearingDeg = full.bearingDeg;
             fix.accuracyM = full.accuracyM;
+            fix.source = full.source == null ? "" : full.source.wire();
+            // 本次解算的年龄：界面上要能看出「这个位置是多久前测的」，
+            // 否则用户看到的是一份看起来很新鲜的、其实已经旧了的位置
+            fix.ageMillis = full.computeAgeMillis(SystemClock.elapsedRealtimeNanos(),
+                    System.currentTimeMillis());
             fix.fixAt = System.currentTimeMillis();
             state.setFix(fix);
 
