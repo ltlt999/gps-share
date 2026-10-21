@@ -25,6 +25,8 @@ final class StatsGridBuilder {
     static final String KEY_UPTIME = "uptime";
     static final String KEY_ACCURACY = "accuracy";
     static final String KEY_BYTES = "bytes";
+    static final String KEY_SOURCE = "source";
+    static final String KEY_LATENCY = "latency";
 
     private StatsGridBuilder() {
     }
@@ -61,6 +63,13 @@ final class StatsGridBuilder {
         // 精度是「这份数据可信到什么程度」的直接读数：
         // 用户不需要懂权限分级，看这个数就知道共享出去的坐标好不好
         add(grid, target, KEY_ACCURACY, R.string.stat_accuracy, R.drawable.ic_stat_location,
+                R.string.value_unknown, 1);
+        // 数据来源：卫星定位还是网络兜底。用户一眼就能看出「现在这个位置
+        // 值不值得信」——网络定位的精度可能差几十倍
+        add(grid, target, KEY_SOURCE, R.string.stat_source, R.drawable.ic_stat_location,
+                R.string.value_unknown, 1);
+        // 定位延迟：解算到现在有多旧。这张卡直接回答「共享有多快」
+        add(grid, target, KEY_LATENCY, R.string.stat_latency, R.drawable.ic_stat_speed,
                 R.string.value_unknown, 1);
         // 接收端这里显示的是「已接收条数」，与发送端语义不同，标题跟着换
         add(grid, target, KEY_SENTENCES,

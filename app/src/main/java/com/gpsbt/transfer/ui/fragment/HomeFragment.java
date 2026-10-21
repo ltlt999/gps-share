@@ -3,6 +3,8 @@ package com.gpsbt.transfer.ui.fragment;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -89,6 +91,24 @@ public class HomeFragment extends Fragment
     private TextInputEditText inputHost;
     private TextInputEditText inputPort;
     private GridLayout statsGrid;
+
+    /** 超过这个时间没有新定位，就认为位置已经过期。 */
+    private static final long STALE_AFTER_MS = 5000L;
+
+    /**
+     * 每秒刷新「定位延迟」卡。
+     *
+     * <p>位置过期提示要能一直往上走，而界面平时只在收到新数据时才刷新 ——
+     * 数据断流时恰好没有刷新，过期秒数就永远停在那一帧上。
+     */
+    private final Handler ticker = new Handler(Looper.getMainLooper());
+    private final Runnable tickerTask = new Runnable() {
+        @Override
+        public void run() {
+            refreshLatencyCard();
+            ticker.postDelayed(this, 1000L);
+        }
+    };
 
     private final List<BluetoothDevice> devices = new ArrayList<BluetoothDevice>();
     private final Map<String, StatCardView> cards = new LinkedHashMap<String, StatCardView>();
@@ -303,12 +323,14 @@ public class HomeFragment extends Fragment
         super.onStart();
         state.addListener(this);
         render(state);
+        ticker.postDelayed(tickerTask, 1000L);
     }
 
     @Override
     public void onStop() {
         state.removeListener(this);
         stopDiscoveryListener();
+        ticker.removeCallbacks(tickerTask);
         super.onStop();
     }
 
@@ -648,6 +670,11 @@ public class HomeFragment extends Fragment
                         || Float.isNaN(fix.accuracyM) ? unknown
                 : getString(R.string.stat_accuracy_value,
                         String.format(Locale.US, "%.0f", fix.accuracyM)));
+        // 数据来源：卫星定位还是网络兜底
+        set(StatsGridBuilder.KEY_SOURCE, sourceText(fix, running));
+        // 定位延迟：新鲜时用协议给的解算年龄；过期后改用「距上次收到」的时间，
+        // 那个数会一直往上走，用户能看出位置已经陈旧
+        set(StatsGridBuilder.KEY_LATENCY, latencyText(fix, running));
         set(StatsGridBuilder.KEY_SENTENCES,
                 String.valueOf(running ? snapshot.stats().sentences : 0));
         set(StatsGridBuilder.KEY_BYTES, Formatters.bytes(
@@ -690,6 +717,55 @@ public class HomeFragment extends Fragment
         if (card != null) {
             card.setValue(value);
         }
+    }
+
+    /**
+     * 「数据来源」卡的取值。
+     *
+     * <p>来源不明时显示「未知」而不是默认按卫星定位算：对 v1.6.2 的发送端，
+     * 协议里没有这一项，硬说成「GPS卫星定位」就是编造。
+     */
+    private String sourceText(TransmitterState.Fix fix, boolean running) {
+        if (fix == null || !running || fix.source == null || fix.source.isEmpty()) {
+            return getString(R.string.value_unknown);
+        }
+        if ("NET".equals(fix.source)) {
+            return getString(R.string.value_source_net);
+        }
+        if ("GPS".equals(fix.source)) {
+            return getString(R.string.value_source_gps);
+        }
+        return getString(R.string.value_unknown);
+    }
+
+    /**
+     * 「定位延迟」卡的取值。
+     *
+     * <p>新鲜时用协议给的解算年龄（发送端算的，毫秒级真实值）；
+     * 超过 5 秒没有新定位就改用「距上次收到多久」——那个数会一直往上走，
+     * 用户能一眼看出位置已经陈旧。
+     */
+    private String latencyText(TransmitterState.Fix fix, boolean running) {
+        if (fix == null || !running || !fix.valid) {
+            return getString(R.string.value_unknown);
+        }
+        long sinceArrival = System.currentTimeMillis() - fix.fixAt;
+        if (sinceArrival > STALE_AFTER_MS) {
+            return getString(R.string.stat_latency_stale,
+                    String.format(Locale.US, "%.0f", sinceArrival / 1000.0d));
+        }
+        long age = fix.ageMillis >= 0L ? fix.ageMillis : sinceArrival;
+        return getString(R.string.stat_latency_value,
+                String.format(Locale.US, "%.2f", age / 1000.0d));
+    }
+
+    /** 每秒只更新「定位延迟」卡：其余卡片没有时效性，不必跟着重画。 */
+    private void refreshLatencyCard() {
+        if (!isAdded()) {
+            return;
+        }
+        boolean running = state.phase() == TransmitterState.Phase.RUNNING;
+        set(StatsGridBuilder.KEY_LATENCY, latencyText(state.fix(), running));
     }
 
     private void renderPanels() {
