@@ -221,6 +221,7 @@
     <string name="receive_notif_waiting">等待发送端…</string>
     <string name="receive_notif_stats">已接收 %1$d 条 / %2$s</string>
     <string name="receive_mock_denied">未获得模拟位置授权，定位无法注入</string>
+    <string name="receive_inject_failed">定位注入连续失败，请检查开发者选项里的模拟位置授权</string>
 
     <!-- 角色与接收面板 -->
     <string name="home_role_title">角色</string>

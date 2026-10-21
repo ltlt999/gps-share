@@ -71,6 +71,16 @@ public class ReceiveService extends Service {
     private TransmitStats stats;
     private ReceiveLink client;
     private MockLocationInjector injector;
+    /** 注入连续失败时对外报告。 */
+    private final MockLocationInjector.FailureListener injectionFailureListener =
+            new MockLocationInjector.FailureListener() {
+                @Override
+                public void onInjectionFailed(String message) {
+                    LogBus.get().log(LogBus.Level.ERROR, "定位注入连续失败：" + message);
+                    state.setStatusText(getString(R.string.receive_inject_failed));
+                    refreshNotification();
+                }
+            };
     private String host;
     private int port;
     /** 停止幂等守卫：stopSelfSafely 被多次调用时只真正执行一次。 */
@@ -223,6 +233,7 @@ public class ReceiveService extends Service {
         state.setStatusText(initialStatus());
 
         injector = new MockLocationInjector(this);
+        injector.setFailureListener(injectionFailureListener);
         if (!injector.start()) {
             state.setStatusText(getString(R.string.receive_mock_denied));
         } else {
@@ -399,6 +410,11 @@ public class ReceiveService extends Service {
             } else {
                 state.setPeers(null);
                 stats.startedAt = 0L;
+                if (injector != null) {
+                    // 断链后要忘掉上一个解算的身份：重连后发送端的序号可能
+                    // 从头开始（新进程），旧身份留着会把新位置误判成重复
+                    injector.resetPolicy();
+                }
             }
             refreshNotification();
         }
@@ -418,6 +434,7 @@ public class ReceiveService extends Service {
             if (injector != null) {
                 injector.inject(location);
             }
+            // 定位状态：每个解算更新一次
             TransmitterState.Fix fix = new TransmitterState.Fix();
             fix.valid = location.valid;
             fix.satellitesInView = location.satellitesInView();
@@ -428,15 +445,22 @@ public class ReceiveService extends Service {
             fix.speedMps = location.speedMps;
             fix.bearingDeg = location.bearingDeg;
             fix.accuracyM = location.accuracyM;
+            // 数据来源与解算年龄：界面上要能看出「这份定位是哪来的、有多旧」
+            fix.source = location.source == null ? "" : location.source.wire();
+            fix.ageMillis = location.ageMillis;
             fix.fixAt = System.currentTimeMillis();
             state.setFix(fix);
 
-            List<SatelliteRadarView.Sat> converted = new ArrayList<SatelliteRadarView.Sat>();
-            for (NmeaInput.Sat sat : location.satellites()) {
-                converted.add(new SatelliteRadarView.Sat(sat.prn, sat.elevationDeg,
-                        sat.azimuthDeg, sat.snr, sat.used, sat.talker));
+            // 卫星明细只在带卫星的快照里更新：位置快照的卫星列表是空的，
+            // 拿它去覆盖会把刚收到的卫星视图清掉
+            if (location.withSatellites) {
+                List<SatelliteRadarView.Sat> converted = new ArrayList<SatelliteRadarView.Sat>();
+                for (NmeaInput.Sat sat : location.satellites()) {
+                    converted.add(new SatelliteRadarView.Sat(sat.prn, sat.elevationDeg,
+                            sat.azimuthDeg, sat.snr, sat.used, sat.talker));
+                }
+                state.setSatellites(converted);
             }
-            state.setSatellites(converted);
             refreshNotification();
         }
     };

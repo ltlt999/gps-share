@@ -30,6 +30,22 @@ public final class MockLocationInjector {
     private LocationManager manager;
     private boolean installed;
 
+    /** 注入判据：纯逻辑，可单测（见 {@link InjectionPolicy}）。 */
+    private final InjectionPolicy policy = new InjectionPolicy();
+    /** 连续注入失败次数：到 3 次就明确报错给用户看。 */
+    private int consecutiveFailures;
+
+    /** 失败回调：连续失败达到阈值时通知外部（界面 / 通知）。 */
+    public interface FailureListener {
+        void onInjectionFailed(String message);
+    }
+
+    private FailureListener failureListener;
+
+    public void setFailureListener(FailureListener listener) {
+        this.failureListener = listener;
+    }
+
     public MockLocationInjector(Context context) {
         this.context = context.getApplicationContext();
     }
@@ -102,6 +118,8 @@ public final class MockLocationInjector {
 
     /** 卸载测试提供者。幂等。 */
     public void stop() {
+        policy.reset();
+        consecutiveFailures = 0;
         if (!installed || manager == null) {
             return;
         }
@@ -114,33 +132,75 @@ public final class MockLocationInjector {
         }
     }
 
-    /** 注入一次定位。未就绪或定位无效时什么都不做。 */
-    public void inject(NmeaInput input) {
-        if (!installed || manager == null || input == null || !input.valid) {
-            return;
+    /** 断线重连：忘掉上一个解算的身份，新链路的第一个解算要能注入。 */
+    public void resetPolicy() {
+        policy.reset();
+    }
+
+    /**
+     * 注入一次定位。
+     *
+     * <p>判据与参数计算交给 {@link InjectionPolicy}（纯逻辑、可单测），
+     * 这里只负责把参数搬进 {@code Location} 并写进系统。
+     *
+     * @return 本次数据的处置结果；调用方据此决定界面怎么显示
+     */
+    public InjectionPolicy.Decision inject(NmeaInput input) {
+        if (!installed || manager == null || input == null) {
+            return InjectionPolicy.Decision.INVALID;
         }
+        InjectionPolicy.Decision decision = policy.decide(input);
+        if (decision != InjectionPolicy.Decision.INJECT) {
+            if (decision == InjectionPolicy.Decision.EXPIRED) {
+                LogBus.get().log(LogBus.Level.WARN, "定位已过期，未注入");
+            } else if (decision == InjectionPolicy.Decision.OUT_OF_RANGE) {
+                LogBus.get().log(LogBus.Level.WARN, "定位数值异常，已丢弃");
+            }
+            return decision;
+        }
+        InjectionPolicy.Payload payload = InjectionPolicy.payloadOf(input,
+                System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos());
+
         Location location = new Location(LocationManager.GPS_PROVIDER);
-        location.setLatitude(input.latitude);
-        location.setLongitude(input.longitude);
-        location.setAltitude(input.altitudeM);
-        location.setSpeed((float) input.speedMps);
-        location.setBearing((float) input.bearingDeg);
-        if (!Float.isNaN(input.accuracyM) && input.accuracyM > 0f) {
-            location.setAccuracy(input.accuracyM);
+        location.setLatitude(payload.latitude);
+        location.setLongitude(payload.longitude);
+        location.setAltitude(payload.altitudeM);
+        location.setSpeed((float) payload.speedMps);
+        location.setBearing((float) payload.bearingDeg);
+        // 精度：有就传真值，没有就不设 —— 不写死 5 m / 1 m/s / 5°，
+        // 那是 v1.6.2 的做法，会让 App 以为精度比实际好得多
+        if (!Float.isNaN(payload.accuracyM) && payload.accuracyM > 0f) {
+            location.setAccuracy(payload.accuracyM);
         }
-        long time = input.utcMillis > 0 ? input.utcMillis : System.currentTimeMillis();
-        location.setTime(time);
-        // 不设 elapsedRealtimeNanos 会让 setTestProviderLocation 抛 IllegalArgumentException
-        location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            location.setVerticalAccuracyMeters(5f);
-            location.setSpeedAccuracyMetersPerSecond(1f);
-            location.setBearingAccuracyDegrees(5f);
+            if (!Float.isNaN(payload.verticalAccuracyM) && payload.verticalAccuracyM > 0f) {
+                location.setVerticalAccuracyMeters(payload.verticalAccuracyM);
+            }
+            if (!Float.isNaN(payload.speedAccuracyMps) && payload.speedAccuracyMps > 0f) {
+                location.setSpeedAccuracyMetersPerSecond(payload.speedAccuracyMps);
+            }
+            if (!Float.isNaN(payload.bearingAccuracyDeg) && payload.bearingAccuracyDeg > 0f) {
+                location.setBearingAccuracyDegrees(payload.bearingAccuracyDeg);
+            }
         }
+        // 两个时钟都减去解算年龄：平台算出的年龄与 App 算出的年龄才会一致。
+        // setTestProviderLocation 要求 elapsedRealtimeNanos 非零，
+        // 所以拿不到本机 uptime 时退回当前 uptime —— 宁可年龄偏小，
+        // 也不能抛 IllegalArgumentException 把整次注入丢掉。
+        location.setTime(payload.timeMillis);
+        location.setElapsedRealtimeNanos(payload.elapsedRealtimeNanos > 0L
+                ? payload.elapsedRealtimeNanos
+                : SystemClock.elapsedRealtimeNanos());
         try {
             manager.setTestProviderLocation(LocationManager.GPS_PROVIDER, location);
+            consecutiveFailures = 0;
         } catch (SecurityException | IllegalArgumentException e) {
+            consecutiveFailures++;
             LogBus.get().log(LogBus.Level.WARN, "注入定位失败：" + e.getMessage());
+            if (consecutiveFailures >= 3 && failureListener != null) {
+                failureListener.onInjectionFailed(String.valueOf(e.getMessage()));
+            }
         }
+        return decision;
     }
 }
