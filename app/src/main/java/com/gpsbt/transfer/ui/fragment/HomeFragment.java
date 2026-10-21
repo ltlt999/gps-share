@@ -774,7 +774,7 @@ public class HomeFragment extends Fragment
     }
 
     /**
-     * 每秒刷新「定位延迟」与两个计数卡。
+     * 每秒刷新「定位延迟」与几个随时间走的卡。
      *
      * <p>位置过期提示要能一直往上走，而界面平时只在收到新数据时才刷新 ——
      * 数据断流时恰好没有刷新，过期秒数就永远停在那一帧上。
@@ -783,6 +783,9 @@ public class HomeFragment extends Fragment
      * 那时一个定位快照都不会发布，但链路上确实有数据在跑 ——
      * 数字必须每秒动一下，否则用户会以为链路是假连接
      * （而 README 里明确承诺「链路看着连着但这个数不动 = 假连接」）。
+     *
+     * <p>「在线时长」也要一起刷：它是 HH:mm:ss，每秒都在变，
+     * 只在 render() 时算一次的话，数据断流时那个秒数会停在原地。
      */
     private void refreshLiveCards() {
         if (!isAdded()) {
@@ -798,6 +801,7 @@ public class HomeFragment extends Fragment
                 running ? state.stats().rateHz : 0d,
                 getString(prefs.getRole() == Role.RECEIVE
                         ? R.string.unit_rate_received : R.string.unit_rate)));
+        set(StatsGridBuilder.KEY_UPTIME, uptimeText(state));
     }
 
     private void renderPanels() {
