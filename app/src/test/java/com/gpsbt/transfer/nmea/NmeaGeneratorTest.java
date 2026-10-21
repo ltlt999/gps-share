@@ -251,7 +251,7 @@ public class NmeaGeneratorTest {
 
     @Test
     public void buildFrameEmitsInFixedOrderWithChecksumAndCrLf() {
-        String frame = generator.buildFrame(sample(), NmeaSentenceType.all());
+        String frame = generator.buildFrame(sample(), NmeaSentenceType.all(), 0L);
         assertTrue(frame.endsWith("\r\n"));
         int gga = frame.indexOf("$GPGGA");
         int rmc = frame.indexOf("$GPRMC");
@@ -271,18 +271,114 @@ public class NmeaGeneratorTest {
     @Test
     public void buildFrameSkipsDisabledSentences() {
         Set<NmeaSentenceType> only = EnumSet.of(NmeaSentenceType.GGA);
-        String frame = generator.buildFrame(sample(), only);
+        String frame = generator.buildFrame(sample(), only, 0L);
+        assertTrue(frame.contains("$GPSSHARE"));
         assertTrue(frame.contains("$GPGGA"));
         assertFalse(frame.contains("$GPRMC"));
         assertFalse(frame.contains("$GPGSA"));
         assertFalse(frame.contains("$GPGSV"));
         assertFalse(frame.contains("$GPVTG"));
-        // split 已去掉尾部空串，1 帧即 1 个元素
-        assertEquals(1, frame.split("\r\n").length);
+        // split 已去掉尾部空串；$GPSSHARE 恒在帧首不受开关控制，故为 2 句
+        assertEquals(2, frame.split("\r\n").length);
     }
 
     @Test
     public void knotsConversionFactor() {
         assertEquals(10.0, 5.14444 * NmeaGenerator.MS_TO_KNOTS, 0.01);
+    }
+
+    @Test
+    public void gpsShareCarriesMetadata() {
+        NmeaInput in = sample();
+        in.accuracyM = 12.5f;
+        in.verticalAccuracyM = 8.0f;
+        in.speedAccuracyMps = 0.8f;
+        in.bearingAccuracyDeg = 15.0f;
+        in.source = NmeaInput.Source.GPS;
+        in.seq = 1234L;
+
+        String line = generator.gpsShare(in, 1234L, 842L);
+
+        assertTrue(line.startsWith("$GPSSHARE,1,SEQ=1234"));
+        assertTrue(line.contains("ACC=12.5"));
+        assertTrue(line.contains("VACC=8.0"));
+        assertTrue(line.contains("SACC=0.8"));
+        assertTrue(line.contains("BACC=15.0"));
+        assertTrue(line.contains("AGE=842"));
+        assertTrue(line.contains("SRC=GPS"));
+        // 语句自带 *CS 与 \r\n，与其余生成方法一致
+        assertTrue(line.endsWith("\r\n"));
+    }
+
+    @Test
+    public void gpsShareOmitsUnknownAccuracy() {
+        NmeaInput in = sample();
+        in.accuracyM = Float.NaN;
+        in.verticalAccuracyM = Float.NaN;
+        in.speedAccuracyMps = Float.NaN;
+        in.bearingAccuracyDeg = Float.NaN;
+        in.source = NmeaInput.Source.NET;
+
+        String line = generator.gpsShare(in, 7L, 100L);
+
+        assertFalse(line.contains("ACC="));
+        assertFalse(line.contains("VACC="));
+        assertFalse(line.contains("SACC="));
+        assertFalse(line.contains("BACC="));
+        assertTrue(line.contains("SRC=NET"));
+    }
+
+    @Test
+    public void gpsShareOmitsNonPositiveAccuracy() {
+        NmeaInput in = sample();
+        in.accuracyM = 0f;
+        in.verticalAccuracyM = -1f;
+        in.speedAccuracyMps = 0f;
+        in.bearingAccuracyDeg = Float.NaN;
+        in.source = NmeaInput.Source.NONE;
+
+        String line = generator.gpsShare(in, 3L, 0L);
+
+        // 0 米精度与负精度同样没有意义，一律当「未知」处理，不发上线
+        assertFalse(line.contains("ACC="));
+        assertFalse(line.contains("VACC="));
+        assertFalse(line.contains("SACC="));
+        assertFalse(line.contains("BACC="));
+        assertTrue(line.contains("SRC=NONE"));
+    }
+
+    @Test
+    public void gpsShareHasValidChecksum() {
+        NmeaInput in = sample();
+        String line = generator.gpsShare(in, 1L, 0L);
+        String body = line.substring(1, line.indexOf('*'));
+        String given = line.substring(line.indexOf('*') + 1).trim();
+        assertEquals(NmeaChecksum.toHex(NmeaChecksum.xor(body)), given);
+    }
+
+    @Test
+    public void buildFrameStartsWithGpsShare() {
+        NmeaInput in = sample();
+        in.source = NmeaInput.Source.GPS;
+        in.seq = 5L;
+        Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
+        String frame = generator.buildFrame(in, all, 300L);
+        assertTrue(frame.startsWith("$GPSSHARE,"));
+        assertTrue(frame.indexOf("$GPSSHARE") < frame.indexOf("$GPGGA"));
+    }
+
+    @Test
+    public void keepaliveFrameCarriesLastFixMetadata() {
+        NmeaInput last = sample();
+        last.accuracyM = 7.0f;
+        last.source = NmeaInput.Source.GPS;
+        last.seq = 9L;
+
+        String frame = generator.keepaliveFrame(last, 5000L, 1_700_000_000_000L);
+
+        assertTrue(frame.startsWith("$GPSSHARE,"));
+        assertTrue(frame.contains("SEQ=9"));
+        assertTrue(frame.contains("AGE=5000"));
+        assertTrue(frame.contains("$GPZDA"));
     }
 }

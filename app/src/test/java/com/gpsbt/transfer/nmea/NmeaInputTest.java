@@ -68,6 +68,16 @@ public class NmeaInputTest {
     }
 
     @Test
+    public void ageIgnoresUptimeWhenFixUptimeMissing() {
+        NmeaInput in = new NmeaInput();
+        in.fixElapsedRealtimeNanos = 0L;          // 该次解算没填 fix 的 uptime
+        in.utcMillis = 1_700_000_000_000L;
+        // now 有 uptime（259.2e9 ns ≈ 开机 4.3 分钟），但 fix 的 uptime 缺失 → 必须走墙上时钟。
+        // 若守卫漏掉 fixElapsedRealtimeNanos > 0，这里会算出 259200 ms（≈ 72 倍于真实年龄）
+        assertEquals(1500L, in.computeAgeMillis(259_200_000_000L, 1_700_000_001_500L));
+    }
+
+    @Test
     public void ageClampsToZeroWhenClockWentBackwards() {
         NmeaInput in = new NmeaInput();
         in.utcMillis = 1_700_000_000_000L;

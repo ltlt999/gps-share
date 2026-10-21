@@ -51,7 +51,7 @@ public class NmeaParserTest {
     public void roundTripThroughGenerator() {
         NmeaInput source = sample();
         Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
-        String frame = generator.buildFrame(source, all);
+        String frame = generator.buildFrame(source, all, 0L);
 
         NmeaInput parsed = null;
         // 新设计：GGA/RMC 攒成 pending，GSV 到达连同 entries 一起发布。
@@ -78,7 +78,7 @@ public class NmeaParserTest {
     @Test
     public void gsvFeedsSatelliteListWithTalker() {
         NmeaInput source = sample();
-        String frame = generator.buildFrame(source, EnumSet.of(NmeaSentenceType.GSV));
+        String frame = generator.buildFrame(source, EnumSet.of(NmeaSentenceType.GSV), 0L);
 
         // 新设计：GGA 与 RMC 只攒成 pending，GSV 到达才一起发布
         parser.accept(generator.gga(source));

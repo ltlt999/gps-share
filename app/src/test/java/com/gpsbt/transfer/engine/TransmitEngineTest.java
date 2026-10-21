@@ -65,10 +65,10 @@ public class TransmitEngineTest {
     public void tickWritesFrameOnce() throws IOException {
         engine.publish(sample(1000L), 1000L);
         List<String> sentences = engine.tick(2000L);
-        // GGA + RMC + GSA + GSV(1 页) + VTG = 5 条
-        assertEquals(5, sentences.size());
+        // $GPSSHARE + GGA + RMC + GSA + GSV(1 页) + VTG = 6 条
+        assertEquals(6, sentences.size());
         assertEquals(1, written.size());
-        assertEquals(5, engine.sentences());
+        assertEquals(6, engine.sentences());
         assertEquals(1, engine.frames());
         assertTrue(engine.bytes() > 0);
         assertTrue(engine.hasPending());
@@ -79,7 +79,8 @@ public class TransmitEngineTest {
         // 输入时间戳是 1970-01-01，帧内时间必须取自 tick 的当前时钟
         engine.publish(sample(1000L), 1700000000000L);
         List<String> sentences = engine.tick(1700000001000L);
-        assertTrue(sentences.get(0).startsWith("$GPGGA,221321.00,"));
+        // $GPSSHARE 恒在帧首，GGA 紧随其后
+        assertTrue(sentences.get(1).startsWith("$GPGGA,221321.00,"));
     }
 
     @Test
@@ -89,7 +90,7 @@ public class TransmitEngineTest {
             engine.tick(1000L + i * 1000L);
         }
         assertEquals(3, written.size());
-        assertEquals(15, engine.sentences());
+        assertEquals(18, engine.sentences());
     }
 
     @Test
@@ -99,15 +100,16 @@ public class TransmitEngineTest {
         written.clear();
         assertTrue(engine.tick(7000L).isEmpty());
         assertTrue(written.isEmpty());
-        assertEquals(5, engine.sentences());
+        assertEquals(6, engine.sentences());
     }
 
     @Test
     public void onlyGgaWhenSentenceDisabled() throws IOException {
         engine = new TransmitEngine(sink, generator, Collections.singleton(NmeaSentenceType.GGA), 5000L);
         engine.publish(sample(1000L), 1000L);
-        assertEquals(1, engine.tick(2000L).size());
-        assertEquals(1, engine.sentences());
+        // 开关只管标准语句；$GPSSHARE 恒在帧首，故为 2 条
+        assertEquals(2, engine.tick(2000L).size());
+        assertEquals(2, engine.sentences());
     }
 
     @Test

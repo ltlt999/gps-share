@@ -15,6 +15,9 @@ public final class NmeaGenerator {
     /** 米/秒 → 节。 */
     public static final double MS_TO_KNOTS = 1.9438444924406045;
 
+    /** $GPSSHARE 的协议版本。 */
+    public static final int PROTOCOL_VERSION = 1;
+
     private static final String TALKER = "GP";
     private final float defaultHdop;
 
@@ -185,9 +188,46 @@ public final class NmeaGenerator {
         return frame("GP", "ZDA", f);
     }
 
-    /** 按固定顺序拼装一帧（各语句均带 *CS 与 \r\n）。 */
-    public String buildFrame(NmeaInput in, Set<NmeaSentenceType> enabled) {
+    /**
+     * $GPSSHARE：承载标准 NMEA 装不下的元信息 —— 米制精度、解算年龄、来源。
+     *
+     * 帧首发送，接收端解析到位置时元数据已在手。精度值不可用（NaN）时
+     * **省略整个键**，不写 0 也不写默认值 —— 「未知」和「0 米」是两回事。
+     */
+    public String gpsShare(NmeaInput in, long seq, long ageMillis) {
+        NmeaInput source = in == null ? new NmeaInput() : in;
+        StringBuilder body = new StringBuilder();
+        body.append(PROTOCOL_VERSION).append(",SEQ=").append(Math.max(0L, seq));
+        appendAccuracy(body, "ACC", source.accuracyM);
+        appendAccuracy(body, "VACC", source.verticalAccuracyM);
+        appendAccuracy(body, "SACC", source.speedAccuracyMps);
+        appendAccuracy(body, "BACC", source.bearingAccuracyDeg);
+        body.append(",AGE=").append(Math.max(0L, ageMillis));
+        body.append(",SRC=").append(source.source.wire());
+        return frame("GPS", "SHARE", Collections.singletonList(body.toString()));
+    }
+
+    /** 无新解算时的保活帧：$GPSSHARE（带上一次解算的元数据）+ $GPZDA。 */
+    public String keepaliveFrame(NmeaInput last, long ageMillis, long nowMillis) {
+        NmeaInput source = last == null ? new NmeaInput() : last;
         StringBuilder sb = new StringBuilder();
+        sb.append(gpsShare(source, source.seq, ageMillis));
+        sb.append(zda(nowMillis));
+        return sb.toString();
+    }
+
+    private static void appendAccuracy(StringBuilder body, String key, float value) {
+        if (Float.isNaN(value) || value <= 0f) {
+            return;
+        }
+        body.append(',').append(key).append('=')
+                .append(String.format(Locale.US, "%.1f", value));
+    }
+
+    /** 按固定顺序拼装一帧（各语句均带 *CS 与 \r\n）。$GPSSHARE 恒在帧首。 */
+    public String buildFrame(NmeaInput in, Set<NmeaSentenceType> enabled, long ageMillis) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(gpsShare(in, in.seq, ageMillis));
         if (enabled.contains(NmeaSentenceType.GGA)) {
             sb.append(gga(in));
         }

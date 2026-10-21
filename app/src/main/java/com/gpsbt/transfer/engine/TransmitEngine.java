@@ -64,7 +64,7 @@ public final class TransmitEngine {
             frameInput = input.copy();
             frameInput.utcMillis = nowMillis;
         }
-        String frame = generator.buildFrame(frameInput, enabled);
+        String frame = generator.buildFrame(frameInput, enabled, 0L);
         byte[] data = frame.getBytes(StandardCharsets.US_ASCII);
         if (data.length > 0) {
             sink.write(data, data.length);
