@@ -15,10 +15,18 @@ import java.util.Set;
  *
  * 纯逻辑、无 Android 依赖，可单测。
  *
- * 多句合并：GGA 给位置 / 海拔 / 使用卫星数，RMC 给速度 / 航向，GSV 给可见卫星，
- * GSA 给「哪几颗用于定位」。这些语句在一个定位周期里先后到达，因此解析器**累积**
- * 状态，只在收到 GGA 或 RMC（两句都带位置与有效性）时对外发布快照。
- * 同一周期发布两次无害——注入方只是把同一个位置再写一遍。
+ * <p><b>发布时机</b>（v2.0.0 起）：
+ * <ul>
+ *   <li>位置在 <b>RMC</b> 处发布 —— RMC 带着本周期的速度与航向，而 GGA（经纬度、高度）
+ *       就在它前一句。此刻发布 = 位置、速度、航向、高度全是本周期的值。
+ *   <li>卫星在 <b>GSV</b> 处发布（与 v1.6.2 一致）。
+ *   <li>某一帧没有 RMC（用户关了 RMC 语句）时，位置拖到<b>下一帧开头</b>补发 ——
+ *       宁可晚 1 秒，也要给完整的一份数据。「速度航向是上一周期、其余是本周期」
+ *       的混合数据比晚 1 秒的完整数据更糟。
+ * </ul>
+ *
+ * <p><b>元信息</b>（米制精度、解算年龄、来源、序号）来自帧首的 {@code $GPSSHARE}。
+ * 缺该语句（对 v1.6.2 发送端）时完全退回旧行为：精度 = HDOP×5、年龄 = 0，不崩不卡。
  */
 public final class NmeaParser {
 
@@ -59,6 +67,32 @@ public final class NmeaParser {
  与校验和）。 */
     private long wireBytes;
 
+    /**
+     * 本帧的位置已经就位、但还没发布 —— 在等 RMC 补齐本周期的速度与航向。
+     *
+     * <p>为 true 时，说明 GGA 已到而 RMC 还没到。若本帧一直没有 RMC，
+     * 位置会在下一帧开头（{@code $GPSSHARE} 或 GGA 到达时）补发。
+     */
+    private boolean positionPending;
+
+    /**
+     * {@code $GPSSHARE} 带来的真实水平精度。NaN = 本帧没有（或发送端是旧版，没有该语句）。
+     *
+     * <p>单独存一份、<b>不</b>直接写进 {@code state.accuracyM}：GGA 的 HDOP×5 兜底会写
+     * {@code state.accuracyM}，两者互相覆盖就会把真实精度冲掉。发布时再择优。
+     */
+    private float metaAccuracyM = Float.NaN;
+
+    /**
+     * 自上一个 GGA 以来是否见过 {@code $GPSSHARE}。
+     *
+     * <p>用来判断「GGA 到达时该不该重置元信息」：v2 的帧首是 {@code $GPSSHARE}，
+     * 它就在 GGA 之前，真值已经到手，GGA 再重置一次就把真值冲掉了；
+     * 而 v1.6.2 的帧首是 GGA，没有 {@code $GPSSHARE}，此时必须重置，
+     * 否则会把上一帧的元信息留到这一帧。
+     */
+    private boolean seenShareInFrame;
+
     /** 清空累积状态（断线重连时调用）。 */
     public void reset() {
         state.valid = false;
@@ -75,21 +109,30 @@ public final class NmeaParser {
         usedPrns.clear();
         hasFix = false;
         wireBytes = 0L;
+        positionPending = false;
+        metaAccuracyM = Float.NaN;
+        seenShareInFrame = false;
+        state.seq = 0L;
+        state.ageMillis = 0L;
+        state.source = NmeaInput.Source.NONE;
+        state.verticalAccuracyM = Float.NaN;
+        state.speedAccuracyMps = Float.NaN;
+        state.bearingAccuracyDeg = Float.NaN;
     }
 
     /**
      * 喂入一行。
      *
-     * 发布策略：本周期 GGA（也接受 RMC）到达后标记已就位；之后每条 GSV 都
-     * 用当前 {@code state}（位置 + 速度 + satellitesUsed）加上累积的
-     * {@code entries} 打包成快照发布。多次 GSV 覆盖式发布，最后一条携带
-     * 本周期全部卫星。{@code satellitesUsed} 与 {@code satellitesInView}
-     * 始终来自同一周期。
+     * <p>发布策略（v2.0.0）：
+     * <ul>
+     *   <li>{@code $GPSSHARE} —— 帧首。读入本帧元信息；若上一帧因缺 RMC 而没发出去，
+     *       此刻补发。
+     *   <li>GGA —— 读入位置与高度，<b>不发布</b>（RMC 紧跟其后，带着本周期的速度与航向）。
+     *   <li>RMC —— <b>位置发布点</b>。
+     *   <li>GSV —— 卫星发布点。多星座多页会发布多次，最后一次携带完整卫星列表。
+     * </ul>
      *
-     * 边界：若 GSV 被禁用，GSV 不到，hasFix 一直为 true；下一周期 GGA 来了
-     * 会把上一周期的"占位"发出（sats 为空），保证不会卡死。
-     *
-     * @return 快照（GSV 每条都返，其他句子返 null），或 null
+     * @return 快照，或 null
      */
     public NmeaInput accept(String line) {
         if (line == null) {
@@ -107,27 +150,49 @@ public final class NmeaParser {
         if (f.length == 0 || f[0].length() < MIN_SENTENCE_FIELD_LENGTH) {
             return null;
         }
+        String head = f[0].toUpperCase(Locale.US);
+        if ("GPSSHARE".equals(head)) {
+            // 帧首。上一帧若因缺 RMC 而没发出去，此刻补发。
+            // 补发必须走在 applyShare 之前 —— 它要用的是上一帧的元信息，
+            // 等 applyShare 把本帧的元信息填进来就晚了。
+            NmeaInput deferred = flushPendingPosition();
+            seenShareInFrame = true;
+            wireBytes = 0L;
+            wireBytes += text.length() + 2;
+            applyShare(f);
+            return deferred;
+        }
         // 形如 GPGGA / BDGSV：末三位是语句类型
-        String type = f[0].substring(f[0].length() - 3).toUpperCase(Locale.US);
+        String type = head.substring(head.length() - 3);
         if ("GGA".equals(type)) {
-            // 新一周期的确定起点：先把上一周期遗留的"占位"发出去（覆盖式），
-            // 然后清空累积。
-            NmeaInput leftover = publishIfHasFix();
+            // 帧边界（对没有 $GPSSHARE 的旧版发送端，GGA 就是帧边界）：
+            // 上一帧若因缺 RMC 而没发出去，此刻补发。
+            NmeaInput deferred = flushPendingPosition();
+            if (!seenShareInFrame) {
+                // 本帧没有 $GPSSHARE：元信息必须清成「未知」，
+                // 否则会把上一帧的精度、年龄、来源留到这一帧。
+                metaAccuracyM = Float.NaN;
+                wireBytes = 0L;
+            }
+            seenShareInFrame = false;
             entries.clear();
             usedPrns.clear();
-            wireBytes = 0L;
             wireBytes += text.length() + 2;
             if (applyGga(f)) {
                 hasFix = true;
             }
-            return leftover;
+            // 不在这里发布：RMC 紧跟其后，带着本周期的速度与航向。
+            // 此刻发布的话，速度与航向会是上一周期的旧值。
+            positionPending = true;
+            return deferred;
         }
         if ("RMC".equals(type)) {
             wireBytes += text.length() + 2;
             if (applyRmc(f)) {
                 hasFix = true;
             }
-            return null;
+            positionPending = false;
+            return publishPosition();
         }
         if ("GSA".equals(type)) {
             wireBytes += text.length() + 2;
@@ -141,13 +206,26 @@ public final class NmeaParser {
             applyGsv(f);
             // GSV 到了：连同当前累积的卫星列表一起发布。多星座多页会发布多次，
             // 最后一次携带完整卫星列表——把中间值覆盖掉。
-            return publishIfHasFix();
+            return publishSatellites();
         }
         return null;
     }
 
-    /** 用 state（位置 + satellitesUsed）与当前 entries 打包快照；hasFix=false 时返 null。 */
-    private NmeaInput publishIfHasFix() {
+    /** 位置发布点：只带位置字段，卫星明细留给 GSV 发布点。 */
+    private NmeaInput publishPosition() {
+        if (!hasFix) {
+            return null;
+        }
+        NmeaInput snap = state.copy();
+        snap.wireBytes = wireBytes;
+        snap.clearSats();
+        snap.withSatellites = false;
+        applyMetaAccuracy(snap);
+        return snap;
+    }
+
+    /** 卫星发布点：带完整卫星列表。 */
+    private NmeaInput publishSatellites() {
         if (!hasFix) {
             return null;
         }
@@ -158,7 +236,30 @@ public final class NmeaParser {
             snap.addSat(new NmeaInput.Sat(entry.prn, entry.elevation, entry.azimuth,
                     entry.snr, entry.used, entry.talker));
         }
+        snap.withSatellites = true;
+        applyMetaAccuracy(snap);
         return snap;
+    }
+
+    /** $GPSSHARE 的真实精度优先于 GGA 的 HDOP×5 兜底。 */
+    private void applyMetaAccuracy(NmeaInput snap) {
+        if (!Float.isNaN(metaAccuracyM)) {
+            snap.accuracyM = metaAccuracyM;
+        }
+    }
+
+    /**
+     * 上一帧没有 RMC 时，位置拖到这一帧开头才发。
+     *
+     * <p>宁可晚 1 秒，也要给完整的一份数据 —— 「速度航向是上一周期、其余是本周期」
+     * 的混合数据比晚 1 秒的完整数据更糟。
+     */
+    private NmeaInput flushPendingPosition() {
+        if (!positionPending) {
+            return null;
+        }
+        positionPending = false;
+        return publishPosition();
     }
 
     /** 去掉 $ 前缀并校验 *CS；校验失败或格式不符返回 null。 */
@@ -265,6 +366,69 @@ public final class NmeaParser {
         for (SatEntry entry : entries) {
             entry.used = usedPrns.contains(entry.prn);
         }
+    }
+
+    /**
+     * 解析 {@code $GPSSHARE}：{@code $GPSSHARE,1,SEQ=..,ACC=..,VACC=..,SACC=..,BACC=..,AGE=..,SRC=..}
+     *
+     * <p>键值对形式，缺的键就是「未知」——不填默认值。
+     *
+     * <p><b>本帧的元信息是整体替换，不是逐项更新。</b>先把上一帧残留的值全部清成
+     * 「未知」，再按本帧出现的键填上。逐项更新的话，某个键在这一帧里消失
+     * （发送端这一帧取不到垂直精度）时，会把上一帧的旧值继续报出去 ——
+     * 那等于谎报一个已经不成立的精度。
+     */
+    private void applyShare(String[] f) {
+        state.seq = 0L;
+        state.ageMillis = 0L;
+        state.source = NmeaInput.Source.NONE;
+        state.verticalAccuracyM = Float.NaN;
+        state.speedAccuracyMps = Float.NaN;
+        state.bearingAccuracyDeg = Float.NaN;
+        metaAccuracyM = Float.NaN;
+        for (int i = 2; i < f.length; i++) {
+            String field = f[i];
+            if (field == null || field.isEmpty()) {
+                continue;
+            }
+            int eq = field.indexOf('=');
+            if (eq <= 0 || eq == field.length() - 1) {
+                continue;
+            }
+            String key = field.substring(0, eq).trim().toUpperCase(Locale.US);
+            String value = field.substring(eq + 1).trim();
+            if ("SEQ".equals(key)) {
+                state.seq = (long) parseDouble(value, 0d);
+            } else if ("AGE".equals(key)) {
+                state.ageMillis = (long) parseDouble(value, 0d);
+            } else if ("SRC".equals(key)) {
+                state.source = NmeaInput.Source.fromWire(value);
+            } else if ("ACC".equals(key)) {
+                metaAccuracyM = parseFiniteFloat(value);
+            } else if ("VACC".equals(key)) {
+                state.verticalAccuracyM = parseFiniteFloat(value);
+            } else if ("SACC".equals(key)) {
+                state.speedAccuracyMps = parseFiniteFloat(value);
+            } else if ("BACC".equals(key)) {
+                state.bearingAccuracyDeg = parseFiniteFloat(value);
+            }
+        }
+    }
+
+    /**
+     * 解析一个浮点精度值；无法解析或非有限（NaN / ±Infinity）时返回 NaN（未知）。
+     *
+     * <p>{@code Double.parseDouble("Infinity")} 是<b>成功</b>的 —— 线上真出现
+     * {@code ACC=Infinity} 时，它会被当成一个「极好的精度」原样收下。这里必须挡一道，
+     * 与发送端「非有限值就不上线」的规则对齐。
+     */
+    private static float parseFiniteFloat(String value) {
+        double parsed = parseDouble(value, Double.NaN);
+        if (!Double.isFinite(parsed)) {
+            return Float.NaN;
+        }
+        float result = (float) parsed;
+        return Float.isFinite(result) ? result : Float.NaN;
     }
 
     /** ddmm.mmmm + 半球字母 → 十进制度；半球缺失时按正数处理。 */

@@ -1,6 +1,7 @@
 package com.gpsbt.transfer.rx;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -12,7 +13,9 @@ import com.gpsbt.transfer.nmea.NmeaSentenceType;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 public class NmeaParserTest {
@@ -204,6 +207,172 @@ public class NmeaParserTest {
             }
             assertNotNull("第 " + (i + 1) + " 轮 GSV 应发布快照", parsed);
             assertEquals("第 " + (i + 1) + " 轮累积到的卫星数", 3, parsed.satellitesInView());
+        }
+    }
+
+    // ---- $GPSSHARE：元信息解析（v2.0.0 协议） ----
+
+    /** 生成一条 $GPSSHARE。seq 直接写进 in.seq —— 生成器只认这一个真相源。 */
+    private String share(NmeaInput in, long seq, long ageMillis, NmeaInput.Source src) {
+        in.seq = seq;
+        in.source = src;
+        return generator.gpsShare(in, ageMillis);
+    }
+
+    @Test
+    public void parsesGpsShareMetadata() {
+        NmeaInput in = sample();
+        in.accuracyM = 12.5f;
+        in.verticalAccuracyM = 8.0f;
+        in.speedAccuracyMps = 0.8f;
+        in.bearingAccuracyDeg = 15.0f;
+
+        parser.accept(share(in, 77L, 842L, NmeaInput.Source.NET));
+
+        NmeaInput snap = parser.accept(generator.rmc(in));
+        assertNotNull(snap);
+        assertEquals(77L, snap.seq);
+        assertEquals(842L, snap.ageMillis);
+        assertEquals(NmeaInput.Source.NET, snap.source);
+        assertEquals(12.5f, snap.accuracyM, 0.001f);
+        assertEquals(8.0f, snap.verticalAccuracyM, 0.001f);
+        assertEquals(0.8f, snap.speedAccuracyMps, 0.001f);
+        assertEquals(15.0f, snap.bearingAccuracyDeg, 0.001f);
+    }
+
+    @Test
+    public void gpsShareAccuracyBeatsHdopFallback() {
+        // 两份输入故意给不同的精度：$GPSSHARE 走真值，GGA 走被截断的 HDOP×5。
+        // 用同一个 in 生成两者的话，HDOP×5 恰好等于真值，这个用例就白测了。
+        NmeaInput shareIn = sample();
+        shareIn.accuracyM = 12.5f;
+        NmeaInput ggaIn = sample();
+        ggaIn.accuracyM = 5.0f;
+
+        parser.accept(share(shareIn, 1L, 100L, NmeaInput.Source.GPS));
+        parser.accept(generator.gga(ggaIn));
+        NmeaInput snap = parser.accept(generator.rmc(ggaIn));
+
+        assertNotNull(snap);
+        // GGA 的 HDOP×5 是 5.0，$GPSSHARE 的 12.5 才是真值
+        assertEquals(12.5f, snap.accuracyM, 0.001f);
+    }
+
+    @Test
+    public void hdopFallbackStillAppliesWithoutShare() {
+        NmeaInput in = sample();
+        in.accuracyM = 5.0f;
+        parser.accept(generator.gga(in));
+        NmeaInput snap = parser.accept(generator.rmc(in));
+
+        assertNotNull(snap);
+        assertEquals(5.0f, snap.accuracyM, 0.001f);
+    }
+
+    @Test
+    public void shareMetadataDoesNotLeakIntoNextFrame() {
+        NmeaInput first = sample();
+        first.accuracyM = 12.5f;
+        first.verticalAccuracyM = 8.0f;
+
+        parser.accept(share(first, 1L, 100L, NmeaInput.Source.GPS));
+        NmeaInput snap1 = parser.accept(generator.rmc(first));
+        assertNotNull(snap1);
+        assertEquals(8.0f, snap1.verticalAccuracyM, 0.001f);
+
+        // 第二帧的 $GPSSHARE 里没有 VACC —— 发送端这一帧取不到垂直精度。
+        // 解析器必须把它当成「未知」，而不是沿用上一帧的 8.0。
+        NmeaInput second = sample();
+        second.accuracyM = 12.5f;
+        second.verticalAccuracyM = Float.NaN;
+
+        parser.accept(share(second, 2L, 120L, NmeaInput.Source.GPS));
+        NmeaInput snap2 = parser.accept(generator.rmc(second));
+
+        assertNotNull(snap2);
+        assertTrue("上一帧的垂直精度不该泄漏到这一帧",
+                Float.isNaN(snap2.verticalAccuracyM));
+        assertEquals(12.5f, snap2.accuracyM, 0.001f);
+        assertEquals(2L, snap2.seq);
+    }
+
+    @Test
+    public void nonFiniteAccuracyOnWireIsTreatedAsUnknown() {
+        // 线上可能出现 "ACC=Infinity"：Double.parseDouble 居然解析成功。
+        // 解析器不能把这种值当真精度收下。
+        NmeaInput in = sample();
+        // 手搓一条带 Infinity 的语句（自己算校验和）
+        String body = "GPSSHARE,1,SEQ=9,ACC=Infinity,AGE=30,SRC=GPS";
+        String crafted = "$" + body + "*"
+                + com.gpsbt.transfer.nmea.NmeaChecksum.toHex(
+                        com.gpsbt.transfer.nmea.NmeaChecksum.xor(body));
+
+        parser.accept(crafted);
+        NmeaInput snap = parser.accept(generator.rmc(in));
+
+        assertNotNull(snap);
+        assertTrue("Infinity 不是精度", Float.isNaN(snap.accuracyM));
+        assertEquals(9L, snap.seq);
+        assertEquals(30L, snap.ageMillis);
+    }
+
+    // ---- 发布时机 ----
+
+    @Test
+    public void positionPublishedOnRmcExactlyOnce() {
+        NmeaInput in = sample();
+        Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
+        String frame = generator.buildFrame(in, all, 100L);
+
+        List<NmeaInput> publishes = new ArrayList<>();
+        for (String line : frame.split("\r\n")) {
+            NmeaInput snap = parser.accept(line);
+            if (snap != null) {
+                publishes.add(snap);
+            }
+        }
+
+        // 一帧两次发布：RMC（位置）+ GSV（卫星明细）
+        assertEquals(2, publishes.size());
+        // 位置那次不带卫星明细 —— 注入方靠这个标志区分「该注入了」
+        assertFalse(publishes.get(0).withSatellites);
+        assertTrue(publishes.get(1).withSatellites);
+    }
+
+    @Test
+    public void ggaDoesNotPublishLeftoverAnyMore() {
+        NmeaInput in = sample();
+        // 先喂一帧 GGA —— v1.6.2 在这里会发布上一周期的位置，现在不应发布
+        assertNull(parser.accept(generator.gga(in)));
+    }
+
+    @Test
+    public void positionWithoutRmcIsPublishedAtNextFrameStart() {
+        NmeaInput in = sample();
+        // 只有 GGA，没有 RMC
+        assertNull(parser.accept(generator.gga(in)));
+        // 下一帧开头（$GPSSHARE）到达时补发
+        NmeaInput snap = parser.accept(share(in, 2L, 50L, NmeaInput.Source.GPS));
+        assertNotNull(snap);
+        assertEquals(in.latitude, snap.latitude, 1e-4);
+    }
+
+    @Test
+    public void positionIsPublishedOnlyOncePerCycle() {
+        // 连续喂两帧完整数据：每帧的位置只发布一次（GSV 那次是卫星快照）
+        NmeaInput in = sample();
+        Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
+
+        for (int cycle = 0; cycle < 2; cycle++) {
+            String frame = generator.buildFrame(in, all, 100L);
+            int positionPublishes = 0;
+            for (String line : frame.split("\r\n")) {
+                NmeaInput snap = parser.accept(line);
+                if (snap != null && !snap.withSatellites) {
+                    positionPublishes++;
+                }
+            }
+            assertEquals("第 " + (cycle + 1) + " 帧的位置发布次数", 1, positionPublishes);
         }
     }
 }
