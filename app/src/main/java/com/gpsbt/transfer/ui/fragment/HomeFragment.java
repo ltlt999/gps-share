@@ -642,6 +642,12 @@ public class HomeFragment extends Fragment
                 : Formatters.bearing(fix.bearingDeg));
         set(StatsGridBuilder.KEY_ALTITUDE, fix == null || !running ? unknown
                 : Formatters.altitude(fix.altitudeM));
+        // 精度：>0 且不是 NaN 才有意义（无定位时可能是 NaN）
+        set(StatsGridBuilder.KEY_ACCURACY,
+                fix == null || !running || fix.accuracyM <= 0
+                        || Float.isNaN(fix.accuracyM) ? unknown
+                : getString(R.string.stat_accuracy_value,
+                        String.format(Locale.US, "%.0f", fix.accuracyM)));
         set(StatsGridBuilder.KEY_SENTENCES,
                 String.valueOf(running ? snapshot.stats().sentences : 0));
         // 两个角色都有速率卡，但量的是不同的东西，单位也不同

@@ -23,6 +23,7 @@ final class StatsGridBuilder {
     static final String KEY_RATE = "rate";
     static final String KEY_DEVICE = "device";
     static final String KEY_UPTIME = "uptime";
+    static final String KEY_ACCURACY = "accuracy";
 
     private StatsGridBuilder() {
     }
@@ -55,6 +56,10 @@ final class StatsGridBuilder {
         add(grid, target, KEY_BEARING, R.string.stat_bearing, R.drawable.ic_stat_compass,
                 R.string.value_unknown, 1);
         add(grid, target, KEY_ALTITUDE, R.string.stat_altitude, R.drawable.ic_stat_altitude,
+                R.string.value_unknown, 1);
+        // 精度是「这份数据可信到什么程度」的直接读数：
+        // 用户不需要懂权限分级，看这个数就知道共享出去的坐标好不好
+        add(grid, target, KEY_ACCURACY, R.string.stat_accuracy, R.drawable.ic_stat_location,
                 R.string.value_unknown, 1);
         // 接收端这里显示的是「已接收条数」，与发送端语义不同，标题跟着换
         add(grid, target, KEY_SENTENCES,

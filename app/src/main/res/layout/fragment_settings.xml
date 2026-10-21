@@ -519,14 +519,6 @@
                 android:layout_marginTop="6dp"
                 android:textSize="12sp" />
 
-            <TextView
-                android:id="@+id/location_perm_live"
-                style="@style/TextSecondary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:textSize="11sp" />
-
             <Button
                 android:id="@+id/btn_request_precise"
                 style="?attr/materialButtonOutlinedStyle"

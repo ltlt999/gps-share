@@ -54,7 +54,6 @@ public class SettingsFragment extends Fragment {
     private TextView hdopValue;
     private TextView about;
     private TextView locationPermState;
-    private TextView locationPermLive;
     private ActivityResultLauncher<String[]> preciseLocationLauncher;
     private Button requestPrecise;
     private TextView licenseDevice;
@@ -104,7 +103,6 @@ public class SettingsFragment extends Fragment {
         inputDiscoveryPort = view.findViewById(R.id.input_discovery_port);
         about = view.findViewById(R.id.about_body);
         locationPermState = view.findViewById(R.id.location_perm_state);
-        locationPermLive = view.findViewById(R.id.location_perm_live);
         requestPrecise = view.findViewById(R.id.btn_request_precise);
         requestPrecise.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -345,46 +343,6 @@ public class SettingsFragment extends Fragment {
         super.onResume();
         // 从系统设置里改完权限回到这里，状态要跟着更新
         renderLocationPermission();
-        // 实时读数来自定位回调，离开页面就停，回来再挂上
-        TransmitterState.get().addListener(locationListener);
-        renderLiveReading();
-    }
-
-    private final TransmitterState.Listener locationListener =
-            new TransmitterState.Listener() {
-                @Override
-                public void onStateChanged(TransmitterState changed) {
-                    renderLiveReading();
-                }
-            };
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        TransmitterState.get().removeListener(locationListener);
-    }
-
-    /**
-     * 「实时读数」：把当前实际读到的定位状态与精度显示出来。
-     *
-     * 光看权限状态不够——权限对不代表链路活着。权限说「精确」、读数
-     * 说「已定位 精度 8 米」两个数对上，整条链路才算被证实是通的；
-     * 权限对而读数一直「暂无定位」，说明定位链路本身有问题，去主页看状态。
-     */
-    private void renderLiveReading() {
-        if (locationPermLive == null || !isAdded()) {
-            return;
-        }
-        TransmitterState.Fix fix = TransmitterState.get().fix();
-        if (fix != null && fix.valid) {
-            locationPermLive.setText(getString(R.string.settings_location_live,
-                    getString(R.string.value_fixed),
-                    fix.accuracyM > 0 && !Float.isNaN(fix.accuracyM)
-                            ? String.format(java.util.Locale.US, "±%.0f 米", fix.accuracyM)
-                            : "未知"));
-        } else {
-            locationPermLive.setText(R.string.settings_location_live_stale);
-        }
     }
 
     /** 刷新授权状态那一行。 */
