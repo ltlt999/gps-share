@@ -36,6 +36,8 @@ public class MainActivity extends AppCompatActivity implements HomeFragment.Home
             new HashMap<Integer, androidx.fragment.app.Fragment>();
 
     private Runnable pendingStart;
+    /** 本次启动是否依赖蓝牙。WiFi 接收端不依赖。 */
+    private boolean pendingNeedBluetooth = true;
 
     private ActivityResultLauncher<String[]> permissionLauncher;
     private ActivityResultLauncher<Intent> enableBluetoothLauncher;
@@ -138,7 +140,13 @@ public class MainActivity extends AppCompatActivity implements HomeFragment.Home
 
     @Override
     public void requestStartPermissions(Runnable onGranted) {
+        requestStartPermissions(onGranted, true);
+    }
+
+    @Override
+    public void requestStartPermissions(Runnable onGranted, boolean needBluetooth) {
         pendingStart = onGranted;
+        pendingNeedBluetooth = needBluetooth;
 
         List<String> missing = new ArrayList<String>();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -149,7 +157,8 @@ public class MainActivity extends AppCompatActivity implements HomeFragment.Home
                 != PackageManager.PERMISSION_GRANTED) {
             missing.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        if (needBluetooth
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
                 != PackageManager.PERMISSION_GRANTED) {
             missing.add(Manifest.permission.BLUETOOTH_CONNECT);
@@ -167,7 +176,22 @@ public class MainActivity extends AppCompatActivity implements HomeFragment.Home
         }
     }
 
+    /**
+     * 权限齐了之后：需要蓝牙才去确保蓝牙已开启。
+     *
+     * 原来这里是无条件调用的，于是 **WiFi 接收端**也会被拖进蓝牙流程——
+     * 没蓝牙硬件的设备上会弹「此设备没有蓝牙硬件，无法传输 GPS 数据」并直接把
+     * 启动吞掉，接收端根本起不来。
+     */
     private void ensureBluetoothEnabled() {
+        // WiFi 等不需要蓝牙的路径直接放行：
+        // 原来这里是无条件进蓝牙流程的，于是 WiFi 接收端也会被拖进来——
+        // 没蓝牙硬件的设备上会弹「此设备没有蓝牙硬件」并直接把启动吞掉，
+        // 接收端根本起不来
+        if (!pendingNeedBluetooth) {
+            runPending();
+            return;
+        }
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null) {
             new MaterialAlertDialogBuilder(this)

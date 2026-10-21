@@ -448,7 +448,7 @@ public class HomeFragment extends Fragment
                 public void run() {
                     GpsOutputService.start(app, prefs.getMode(), selectedMac);
                 }
-            });
+            }, true);
         }
     }
 
@@ -473,7 +473,7 @@ public class HomeFragment extends Fragment
                         // 蓝牙方式下 host/port 用不到，服务会按传输方式自己取
                         ReceiveService.start(app, "", prefs.getLastServerPort());
                     }
-                });
+                }, true);
             }
             return;
         }
@@ -498,7 +498,7 @@ public class HomeFragment extends Fragment
                 public void run() {
                     ReceiveService.start(app, host, port);
                 }
-            });
+            }, false);
         }
     }
 
@@ -525,6 +525,15 @@ public class HomeFragment extends Fragment
     /** Activity 需实现的入口。 */
     public interface HomeCallbacks {
         void requestStartPermissions(Runnable onGranted);
+
+        /**
+         * 申请权限并启动。
+         *
+         * @param needBluetooth 是否依赖蓝牙。WiFi 接收端传 false——否则会被
+         *                      「请开启蓝牙」弹窗拦下，没蓝牙硬件的设备上更会
+         *                      直接弹「无蓝牙硬件」并把启动吞掉
+         */
+        void requestStartPermissions(Runnable onGranted, boolean needBluetooth);
 
         /** 切到底部导航的「设置」页。 */
         void openSettings();
