@@ -162,11 +162,13 @@
     <string name="settings_author">作者</string>
     <string name="settings_email">邮箱</string>
     <string name="settings_location_perm_title">位置权限</string>
-    <string name="settings_location_precise">精确位置（推荐）</string>
-    <string name="settings_location_approximate">只有大致位置：定位误差可达几百米，**不能用来共享 GPS**</string>
-    <string name="settings_location_denied">未授权位置信息</string>
+    <string name="settings_location_precise">权限已就绪：精确位置</string>
+    <string name="settings_location_approximate">只授权了大置位置：定位误差可达几百米，不能用来共享 GPS</string>
+    <string name="settings_location_denied">未授权位置信息（点下方按钮去授权）</string>
     <string name="settings_location_upgrade">请求精确位置</string>
     <string name="stat_accuracy">定位精度</string>
+    <string name="settings_location_live">实时读数：已定位，精度 %1$s</string>
+    <string name="settings_location_live_stale">实时读数：暂无定位（点「开始传输」后，这里会显示当前定位情况）</string>
     <string name="stat_accuracy_value">± %1$s m</string>
     <string name="home_location_approximate">当前只有「大致位置」权限，定位误差很大，共享出去的位置不准。请到「设置 → 位置权限」升级为精确位置。</string>
     <string name="settings_license_title">授权</string>

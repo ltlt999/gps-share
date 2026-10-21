@@ -54,6 +54,7 @@ public class SettingsFragment extends Fragment {
     private TextView hdopValue;
     private TextView about;
     private TextView locationPermState;
+    private TextView locationPermLive;
     private ActivityResultLauncher<String[]> preciseLocationLauncher;
     private Button requestPrecise;
     private TextView licenseDevice;
@@ -103,6 +104,7 @@ public class SettingsFragment extends Fragment {
         inputDiscoveryPort = view.findViewById(R.id.input_discovery_port);
         about = view.findViewById(R.id.about_body);
         locationPermState = view.findViewById(R.id.location_perm_state);
+        locationPermLive = view.findViewById(R.id.location_perm_live);
         requestPrecise = view.findViewById(R.id.btn_request_precise);
         requestPrecise.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -343,6 +345,29 @@ public class SettingsFragment extends Fragment {
         super.onResume();
         // 从系统设置里改完权限回到这里，状态要跟着更新
         renderLocationPermission();
+        renderLiveReading();
+    }
+
+    /**
+     * 「实时读数」：当前实际读到的定位情况。
+     *
+     * 与上面的权限状态分工明确——权限行回答「允许了吗」，读数回答
+     * 「现在真的在读吗」。onResume 刷新一次就够了：设置页不是盯着看的地方，
+     * 想看连续变化去主页的「定位精度」卡。
+     */
+    private void renderLiveReading() {
+        if (locationPermLive == null || !isAdded()) {
+            return;
+        }
+        TransmitterState.Fix fix = TransmitterState.get().fix();
+        if (fix != null && fix.valid) {
+            locationPermLive.setText(getString(R.string.settings_location_live,
+                    fix.accuracyM > 0 && !Float.isNaN(fix.accuracyM)
+                            ? String.format(java.util.Locale.US, "± %.0f m", fix.accuracyM)
+                            : "--"));
+        } else {
+            locationPermLive.setText(R.string.settings_location_live_stale);
+        }
     }
 
     /** 刷新授权状态那一行。 */
