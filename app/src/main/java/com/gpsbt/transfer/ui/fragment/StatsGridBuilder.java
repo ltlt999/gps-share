@@ -71,7 +71,7 @@ final class StatsGridBuilder {
         // 定位延迟：解算到现在有多旧。这张卡直接回答「共享有多快」
         add(grid, target, KEY_LATENCY, R.string.stat_latency, R.drawable.ic_stat_speed,
                 R.string.value_unknown, 1);
-        // 接收端这里显示的是「已接收条数」，与发送端语义不同，标题跟着换
+        // 接收端这里显示的是「已接收语句」，与发送端语义相同，只是标题跟着换
         add(grid, target, KEY_SENTENCES,
                 receive ? R.string.stat_received : R.string.stat_sentences,
                 R.drawable.ic_stat_send, "0", 1);

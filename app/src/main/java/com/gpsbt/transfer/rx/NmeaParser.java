@@ -74,6 +74,15 @@ public final class NmeaParser {
     private long wireBytes;
 
     /**
+     * 本连接累计收到的语句条数。
+     *
+     * <p>与 {@link #wireBytes} 同一个口径：累计、不按帧归零。
+     * 接收端用它统计「已接收语句」—— 与发送端的「已发送语句」是同一个量，
+     * 两边数字对得上就说明链路没丢东西。
+     */
+    private long sentenceCount;
+
+    /**
      * 本帧的位置已经就位、但还没发布 —— 在等 RMC 补齐本周期的速度与航向。
      *
      * <p>为 true 时，说明 GGA 已到而 RMC 还没到。若本帧一直没有 RMC，
@@ -115,6 +124,7 @@ public final class NmeaParser {
         usedPrns.clear();
         hasFix = false;
         wireBytes = 0L;
+        sentenceCount = 0L;
         positionPending = false;
         metaAccuracyM = Float.NaN;
         seenShareInFrame = false;
@@ -158,6 +168,7 @@ public final class NmeaParser {
         // **累计而非每帧归零**：接收端据此统计「已接收数据量」。一帧会发布两次
         // （位置 + 卫星明细），若每帧归零，接收端按快照累加就会把同一帧算两遍。
         wireBytes += text.length() + 2;
+        sentenceCount++;
         String[] f = body.split(",", -1);
         if (f.length == 0 || f[0].length() < MIN_SENTENCE_FIELD_LENGTH) {
             return null;
@@ -223,6 +234,7 @@ public final class NmeaParser {
         }
         NmeaInput snap = state.copy();
         snap.wireBytes = wireBytes;
+        snap.sentenceCount = sentenceCount;
         snap.clearSats();
         snap.withSatellites = false;
         applyMetaAccuracy(snap);
@@ -236,6 +248,7 @@ public final class NmeaParser {
         }
         NmeaInput snap = state.copy();
         snap.wireBytes = wireBytes;
+        snap.sentenceCount = sentenceCount;
         snap.clearSats();
         for (SatEntry entry : entries) {
             snap.addSat(new NmeaInput.Sat(entry.prn, entry.elevation, entry.azimuth,

@@ -656,12 +656,24 @@ public class GpsOutputService extends Service {
             }
         } finally {
             sendScheduled.set(false);
-            // 收尾竞态：刚清标志位就来了新解算，而它的请求被并进了本次任务
+            // 收尾竞态：刚清标志位就来了新解算，而它的请求被并进了本次任务。
+            //
+            // **必须同时要求链路就绪**：链路没连上时 drainSends 会在取队列之前
+            // 就返回，队列里的解算一直还在 —— 若这里无条件再投一次任务，就成了
+            // 「投任务 → 立刻返回 → 再投任务」的死循环，把一个 CPU 核烧掉。
+            // 「开着共享但没连接收端」正是最容易撞上这个场景的时候。
+            // 链路恢复后由保活定时器补投（见 tickKeepalive）。
             TransmitEngine current = engine;
-            if (running && current != null && current.hasPending()) {
+            if (running && current != null && current.hasPending() && isLinkReady()) {
                 requestSend();
             }
         }
+    }
+
+    /** 链路是否就绪（已连接）。发送的前提。 */
+    private boolean isLinkReady() {
+        Link currentLink = link;
+        return currentLink != null && currentLink.isConnected();
     }
 
     /**
@@ -705,6 +717,12 @@ public class GpsOutputService extends Service {
             return;
         }
         linkNotReadyLoggedAt = 0;
+        // 链路刚恢复时，队列里可能还压着断链期间积压的解算：
+        // 趁保活这一拍把它们发出去（太旧的引擎自己会丢）。
+        // 没有这一拍的话，积压的解算要等到下一个新定位才有机会发。
+        if (current.hasPending()) {
+            requestSend();
+        }
         try {
             String keepalive = current.tickKeepalive(nowMillis, nowElapsed);
             if (keepalive != null) {

@@ -406,6 +406,47 @@ public class NmeaParserTest {
     }
 
     @Test
+    public void sentenceCountTracksReceivedStatements() {
+        // 接收端的「已接收语句」要与发送端的「已发送语句」是同一个量：
+        // 两边数字对得上，就说明链路没丢东西
+        NmeaInput in = sample();
+        Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
+        String[] lines = generator.buildFrame(in, all, 0L).split("\r\n");
+
+        NmeaInput last = null;
+        for (String line : lines) {
+            NmeaInput snap = parser.accept(line);
+            if (snap != null) {
+                last = snap;
+            }
+        }
+        assertNotNull(last);
+        // 快照带的是「到此刻为止收到的语句数」。帧尾那条语句（VTG）不触发发布，
+        // 所以最后一个快照的计数会比整帧少一条 —— 下一帧的发布会把它补上。
+        assertTrue(last.sentenceCount > 0);
+        assertTrue(last.sentenceCount <= lines.length);
+
+        // 字节数同理：每条语句的长度 + 换行符
+        int expected = 0;
+        for (String line : lines) {
+            expected += line.length() + 2;
+        }
+        assertTrue(last.wireBytes > 0);
+        assertTrue(last.wireBytes <= expected);
+
+        // 第二帧之后，累计值必然超过第一帧的语句总数（帧尾的语句已被计上）
+        NmeaInput later = null;
+        for (String line : generator.buildFrame(in, all, 0L).split("\r\n")) {
+            NmeaInput snap = parser.accept(line);
+            if (snap != null) {
+                later = snap;
+            }
+        }
+        assertNotNull(later);
+        assertTrue(later.sentenceCount > lines.length);
+    }
+
+    @Test
     public void positionIsPublishedOnlyOncePerCycle() {
         // 连续喂两帧完整数据：每帧的位置只发布一次（GSV 那次是卫星快照）
         NmeaInput in = sample();

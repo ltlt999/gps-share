@@ -100,6 +100,15 @@ public final class NmeaInput {
      */
     public transient long wireBytes;
 
+    /**
+     * 本连接累计收到的 NMEA 语句条数。
+     *
+     * <p>与 {@link #wireBytes} 同一个口径：累计值，不是本帧的条数。
+     * 接收端用它统计「已接收语句」—— 与发送端的「已发送语句」是同一个量，
+     * 两边数字对得上就说明链路没丢东西。
+     */
+    public transient long sentenceCount;
+
     private final List<Sat> satellites = new ArrayList<>();
 
     /** 一颗可见卫星。 */
@@ -155,6 +164,7 @@ public final class NmeaInput {
         copy.accuracyM = accuracyM;
         copy.satellitesUsed = satellitesUsed;
         copy.wireBytes = wireBytes;
+        copy.sentenceCount = sentenceCount;
         copy.source = source;
         copy.seq = seq;
         copy.ageMillis = ageMillis;

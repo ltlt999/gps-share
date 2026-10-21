@@ -274,7 +274,7 @@ public class ReceiveService extends Service {
     }
 
     /**
-     * 接收速率（条/秒）：每秒算一次上一秒收到了多少条。
+     * 接收速率（定位/秒）：每秒算一次上一秒收到了多少个定位。
      *
      * 按窗口算而不是取瞬时值——与发送端的 TransmitEngine 一个思路，
      * 数字不会因为一两帧的抖动乱跳。
@@ -282,14 +282,14 @@ public class ReceiveService extends Service {
     private void updateReceiveRate(long now) {
         if (rateWindowStart == 0L) {
             rateWindowStart = now;
-            rateWindowSentences = stats.sentences;
+            rateWindowSentences = stats.frames;
             return;
         }
         long elapsed = now - rateWindowStart;
         if (elapsed >= 1000L) {
-            stats.rateHz = (stats.sentences - rateWindowSentences) * 1000.0d / elapsed;
+            stats.rateHz = (stats.frames - rateWindowSentences) * 1000.0d / elapsed;
             rateWindowStart = now;
-            rateWindowSentences = stats.sentences;
+            rateWindowSentences = stats.frames;
         }
     }
 
@@ -433,7 +433,15 @@ public class ReceiveService extends Service {
                 stopSelfSafely(false);
                 return;
             }
-            stats.sentences++;
+            // 「已接收语句」：与发送端的「已发送语句」同一个口径，
+            // 两边数字对得上就说明链路没丢东西。
+            stats.sentences = location.sentenceCount;
+            // 位置速率：只数位置快照。卫星快照与位置快照是同一个解算，
+            // 两边都数的话接收速率会翻倍（1 Hz 的 GPS 会显示成 2.0 定位/秒），
+            // 与发送端的「发送速率」也对不上。
+            if (!location.withSatellites) {
+                stats.frames++;
+            }
             // 数据量按**增量**结算：快照里的 wireBytes 是本连接累计值，
             // 而一帧会发布两次（位置 + 卫星明细），直接累加会把同一帧算两遍。
             long wireDelta = location.wireBytes - countedWireBytes;
