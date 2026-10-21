@@ -93,6 +93,9 @@ public class GpsOutputService extends Service {
     private volatile long fixSeq;
     /** 上一次发出过的解算时刻：用来识别「同一个解算被重复投递」。 */
     private volatile long lastFixTimeMillis;
+    /** 定位到达速率的测量窗口：实际出解频率与请求频率不是一回事。 */
+    private final com.gpsbt.transfer.util.FixRateMeter fixRateMeter =
+            new com.gpsbt.transfer.util.FixRateMeter();
     private ScheduledExecutorService relinkExecutor;
     private long lastNotificationAt;
 
@@ -752,6 +755,10 @@ public class GpsOutputService extends Service {
             lastFixTimeMillis = full.utcMillis;
             // 序号严格对应「一个新的位置」：接收端靠它判断是不是同一个解算
             full.seq = ++fixSeq;
+            // 实际到达的定位速率：滑块控制的是请求频率，GPS 芯片能给多少是另一回事
+            fixRateMeter.onFix(full.utcMillis > 0L
+                    ? full.utcMillis : System.currentTimeMillis());
+            stats.fixRateHz = fixRateMeter.rateHz();
             TransmitEngine current = engine;
             if (current != null) {
                 current.publish(full);

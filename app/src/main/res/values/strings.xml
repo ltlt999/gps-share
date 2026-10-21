@@ -134,8 +134,11 @@
     <string name="boot_reason_bluetooth_off">蓝牙未开启</string>
     <string name="boot_reason_no_device">未选择要连接的蓝牙设备</string>
     <string name="settings_title">设置</string>
-    <string name="settings_rate">发送频率</string>
+    <string name="settings_rate">定位请求频率</string>
     <string name="settings_rate_value">%1$d Hz</string>
+    <string name="settings_rate_hint">向手机请求定位的频率。GPS 芯片通常只按 1 Hz 出解，实际收到的定位以设备为准。</string>
+    <string name="settings_rate_actual">实际收到定位：%1$s 次/秒</string>
+    <string name="settings_rate_actual_unknown">实际收到定位：--</string>
     <string name="settings_sentences">NMEA 语句</string>
     <string name="settings_wifi_title">WiFi 传输</string>
     <string name="settings_wifi_port">TCP 端口</string>

@@ -9,6 +9,13 @@ public final class TransmitStats {
     public volatile long lastFrameAt;
     public volatile long startedAt;
     public volatile double rateHz;
+    /**
+     * 实际到达的定位速率（次/秒）。
+     *
+     * <p>与请求频率分开：滑块控制的是向硬件请求定位的间隔，GPS 芯片能给多少
+     * 是另一回事（绝大多数手机是 1 Hz）。
+     */
+    public volatile double fixRateHz;
 
     public void reset() {
         sentences = 0;
@@ -17,5 +24,6 @@ public final class TransmitStats {
         lastFrameAt = 0;
         startedAt = 0;
         rateHz = 0;
+        fixRateHz = 0;
     }
 }

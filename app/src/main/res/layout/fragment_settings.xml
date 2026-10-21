@@ -48,6 +48,23 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/rate_actual"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/settings_rate_actual_unknown"
+                android:textColor="@color/color_text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/settings_rate_hint"
+                android:textColor="@color/color_text_secondary"
+                android:textSize="12sp" />
         </LinearLayout>
 
         <LinearLayout

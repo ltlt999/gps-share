@@ -38,6 +38,7 @@ public class SettingsFragment extends Fragment {
 
     private Slider rateSlider;
     private TextView rateValue;
+    private TextView rateActual;
     private MaterialSwitch swGga;
     private MaterialSwitch swRmc;
     private MaterialSwitch swGsa;
@@ -88,6 +89,7 @@ public class SettingsFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         rateSlider = view.findViewById(R.id.rate_slider);
         rateValue = view.findViewById(R.id.rate_value);
+        rateActual = view.findViewById(R.id.rate_actual);
         swGga = view.findViewById(R.id.sw_gga);
         swRmc = view.findViewById(R.id.sw_rmc);
         swGsa = view.findViewById(R.id.sw_gsa);
@@ -350,6 +352,26 @@ public class SettingsFragment extends Fragment {
         // 从系统设置里改完权限回到这里，状态要跟着更新
         renderLocationPermission();
         renderLiveReading();
+        renderActualRate();
+    }
+
+    /**
+     * 「实际收到定位」：滑块控制的是<b>请求</b>频率，GPS 芯片能给多少是另一回事。
+     *
+     * <p>不把这两件事分开显示，用户会以为滑块拉到 10 Hz 就能拿到 10 Hz 的定位 ——
+     * 而绝大多数手机是 1 Hz 出解。
+     */
+    private void renderActualRate() {
+        if (rateActual == null || !isAdded()) {
+            return;
+        }
+        double hz = TransmitterState.get().stats().fixRateHz;
+        if (hz <= 0d) {
+            rateActual.setText(R.string.settings_rate_actual_unknown);
+            return;
+        }
+        rateActual.setText(getString(R.string.settings_rate_actual,
+                String.format(java.util.Locale.US, "%.1f", hz)));
     }
 
     /**
