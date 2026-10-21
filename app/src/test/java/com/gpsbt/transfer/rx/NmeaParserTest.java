@@ -358,6 +358,54 @@ public class NmeaParserTest {
     }
 
     @Test
+    public void wireBytesAccumulateAcrossFrames() {
+        NmeaInput in = sample();
+        Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
+
+        NmeaInput first = null;
+        for (String line : generator.buildFrame(in, all, 0L).split("\r\n")) {
+            NmeaInput snap = parser.accept(line);
+            if (snap != null) {
+                first = snap;
+            }
+        }
+        assertNotNull(first);
+        assertTrue(first.wireBytes > 0);
+
+        NmeaInput second = null;
+        for (String line : generator.buildFrame(in, all, 0L).split("\r\n")) {
+            NmeaInput snap = parser.accept(line);
+            if (snap != null) {
+                second = snap;
+            }
+        }
+        assertNotNull(second);
+        // 累计值只会变大：接收端按「本次 − 上次」的增量结算，
+        // 直接累加会把同一帧（发布两次）算两遍
+        assertTrue(second.wireBytes > first.wireBytes);
+    }
+
+    @Test
+    public void wireBytesCountKeepaliveToo() {
+        // 保活帧的 $GPZDA 也要算进数据量，否则「已接收数据量」会漏掉
+        // 发送端没有新定位时的那部分流量
+        parser.accept(generator.zda(1_700_000_000_000L));
+        parser.accept(generator.zda(1_700_000_001_000L));
+
+        NmeaInput in = sample();
+        NmeaInput snap = null;
+        for (String line : generator.buildFrame(in, EnumSet.of(NmeaSentenceType.RMC), 0L)
+                .split("\r\n")) {
+            NmeaInput parsed = parser.accept(line);
+            if (parsed != null) {
+                snap = parsed;
+            }
+        }
+        assertNotNull(snap);
+        assertTrue(snap.wireBytes > 0);
+    }
+
+    @Test
     public void positionIsPublishedOnlyOncePerCycle() {
         // 连续喂两帧完整数据：每帧的位置只发布一次（GSV 那次是卫星快照）
         NmeaInput in = sample();

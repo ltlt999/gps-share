@@ -63,8 +63,14 @@ public final class NmeaParser {
      * GSV 覆盖，所以 UI 最终显示的是正确数字。
      */
     private boolean hasFix;
-    /** 本周期累计收到的线上字节（含 
- 与校验和）。 */
+    /**
+     * 本连接累计收到的线上字节（含
+     与校验和）。
+     *
+     * <p><b>累计，不按帧归零。</b>一帧会发布两次（位置 + 卫星明细），
+     * 接收端按快照累加时若每帧归零就会把同一帧算两遍。接收端应当按
+     * 「本次值 − 上次值」的增量结算。
+     */
     private long wireBytes;
 
     /**
@@ -146,6 +152,12 @@ public final class NmeaParser {
         if (body == null) {
             return null;
         }
+        // 字节数在这里累计：凡是校验通过的语句都要算，与语句类型无关
+        // （保活帧的 $GPZDA、暂时不认识的语句类型也都算）。
+        //
+        // **累计而非每帧归零**：接收端据此统计「已接收数据量」。一帧会发布两次
+        // （位置 + 卫星明细），若每帧归零，接收端按快照累加就会把同一帧算两遍。
+        wireBytes += text.length() + 2;
         String[] f = body.split(",", -1);
         if (f.length == 0 || f[0].length() < MIN_SENTENCE_FIELD_LENGTH) {
             return null;
@@ -157,8 +169,6 @@ public final class NmeaParser {
             // 等 applyShare 把本帧的元信息填进来就晚了。
             NmeaInput deferred = flushPendingPosition();
             seenShareInFrame = true;
-            wireBytes = 0L;
-            wireBytes += text.length() + 2;
             applyShare(f);
             return deferred;
         }
@@ -172,12 +182,10 @@ public final class NmeaParser {
                 // 本帧没有 $GPSSHARE：元信息必须清成「未知」，
                 // 否则会把上一帧的精度、年龄、来源留到这一帧。
                 metaAccuracyM = Float.NaN;
-                wireBytes = 0L;
             }
             seenShareInFrame = false;
             entries.clear();
             usedPrns.clear();
-            wireBytes += text.length() + 2;
             if (applyGga(f)) {
                 hasFix = true;
             }
@@ -187,7 +195,6 @@ public final class NmeaParser {
             return deferred;
         }
         if ("RMC".equals(type)) {
-            wireBytes += text.length() + 2;
             if (applyRmc(f)) {
                 hasFix = true;
             }
@@ -195,14 +202,12 @@ public final class NmeaParser {
             return publishPosition();
         }
         if ("GSA".equals(type)) {
-            wireBytes += text.length() + 2;
             applyGsa(f);
             return null;
         }
         if ("GSV".equals(type)) {
             // 不在这里清 entries：多星座的 GSV 是按 talker 分组的，每组
             // 都有自己的 page 1，若按 page<=1 清会把前一个星座的累积数据全清掉。
-            wireBytes += text.length() + 2;
             applyGsv(f);
             // GSV 到了：连同当前累积的卫星列表一起发布。多星座多页会发布多次，
             // 最后一次携带完整卫星列表——把中间值覆盖掉。

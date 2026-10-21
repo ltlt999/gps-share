@@ -92,6 +92,8 @@ public class ReceiveService extends Service {
     /** 接收速率的统计窗口：每秒算一次上一秒收到了多少条。 */
     private long rateWindowStart;
     private long rateWindowSentences;
+    /** 上次结算过的累计字节数：用于按增量统计，避免同一帧被发布两次时重复累加。 */
+    private long countedWireBytes;
 
     public static boolean isRunning() {
         return running;
@@ -407,9 +409,12 @@ public class ReceiveService extends Service {
                 if (stats.startedAt == 0) {
                     stats.startedAt = System.currentTimeMillis();
                 }
+                // 重连后解析器的累计字节数从头开始，结算基准也要归零
+                countedWireBytes = 0L;
             } else {
                 state.setPeers(null);
                 stats.startedAt = 0L;
+                countedWireBytes = 0L;
                 if (injector != null) {
                     // 断链后要忘掉上一个解算的身份：重连后发送端的序号可能
                     // 从头开始（新进程），旧身份留着会把新位置误判成重复
@@ -429,7 +434,16 @@ public class ReceiveService extends Service {
                 return;
             }
             stats.sentences++;
-            stats.bytes += location.wireBytes;
+            // 数据量按**增量**结算：快照里的 wireBytes 是本连接累计值，
+            // 而一帧会发布两次（位置 + 卫星明细），直接累加会把同一帧算两遍。
+            long wireDelta = location.wireBytes - countedWireBytes;
+            if (wireDelta >= 0L) {
+                stats.bytes += wireDelta;
+            } else {
+                // 解析器被重置过（断线重连，累计值从头开始）
+                stats.bytes += location.wireBytes;
+            }
+            countedWireBytes = location.wireBytes;
             updateReceiveRate(System.currentTimeMillis());
             if (injector != null) {
                 injector.inject(location);

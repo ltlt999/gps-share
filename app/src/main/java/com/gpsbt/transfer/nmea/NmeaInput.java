@@ -91,8 +91,12 @@ public final class NmeaInput {
 
     public int satellitesUsed;
     /**
-     * 这份快照对应的线上字节数（本周期实际收到的 NMEA 字节）。
+     * 这份快照对应的线上字节数（本连接累计收到的 NMEA 字节）。
      * 接收端用它统计数据量；0 表示未知（比如快照是程序内部构造的）。
+     *
+     * <p><b>累计值，不是本帧的字节数。</b>一帧会发布两次（位置 + 卫星明细），
+     * 两次发布都带着同一个累计值。统计时要按「本次 − 上次」的增量结算，
+     * 直接累加会把同一帧算两遍。
      */
     public transient long wireBytes;
 
