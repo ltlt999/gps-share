@@ -189,45 +189,90 @@ public final class NmeaGenerator {
     }
 
     /**
-     * $GPSSHARE：承载标准 NMEA 装不下的元信息 —— 米制精度、解算年龄、来源。
+     * $GPSSHARE：承载标准 NMEA 装不下的元信息 —— 米制精度、解算年龄、来源、序号。
      *
-     * 帧首发送，接收端解析到位置时元数据已在手。精度值不可用（NaN）时
-     * **省略整个键**，不写 0 也不写默认值 —— 「未知」和「0 米」是两回事。
+     * <p>帧首发送，接收端解析到位置时元数据已在手。
+     *
+     * <p><b>精度值</b>非有限（NaN / ±Infinity）或不大于 0 时，<b>省略整个键</b>，
+     * 不写 0 也不写默认值 —— 「未知」和「0 米」是两回事，见 {@link #appendAccuracy}。
+     *
+     * <p><b>有效性不在本语句里表达。</b>{@code valid == false} 的快照照样会发出
+     * {@code SRC} 与精度。定位到底成不成立要看 GGA 的质量位与 RMC 的状态位 ——
+     * 线上协议没给 $GPSSHARE 留表达「提供者报了但没有定位」的位置，
+     * 只看本语句会给无效定位显示出一个自信的精度。
+     *
+     * @param in 定位快照。序号直接取 {@link NmeaInput#seq}，本方法不另收 seq 参数 ——
+     *     两个真相源会静默分叉，而 SEQ 是接收端的去重键。不允许为 null
+     * @param ageMillis 解算年龄（毫秒），调用方必须传非负值
+     *     （{@link NmeaInput#computeAgeMillis(long, long)} 已钳好）。这里<b>不再二次钳位</b>：
+     *     钳到 0 恰好是最坏的值（等于宣称「0 毫秒前刚测的」），且与真正新鲜的解算无法区分；
+     *     负值原样上线，交给接收端的范围校验 fail-closed 拒掉
+     * @return 完整的 $GPSSHARE 语句，自带 *CS 与 \r\n
      */
-    public String gpsShare(NmeaInput in, long seq, long ageMillis) {
-        NmeaInput source = in == null ? new NmeaInput() : in;
+    public String gpsShare(NmeaInput in, long ageMillis) {
         StringBuilder body = new StringBuilder();
-        body.append(PROTOCOL_VERSION).append(",SEQ=").append(Math.max(0L, seq));
-        appendAccuracy(body, "ACC", source.accuracyM);
-        appendAccuracy(body, "VACC", source.verticalAccuracyM);
-        appendAccuracy(body, "SACC", source.speedAccuracyMps);
-        appendAccuracy(body, "BACC", source.bearingAccuracyDeg);
-        body.append(",AGE=").append(Math.max(0L, ageMillis));
-        body.append(",SRC=").append(source.source.wire());
+        body.append(PROTOCOL_VERSION).append(",SEQ=").append(Math.max(0L, in.seq));
+        appendAccuracy(body, "ACC", in.accuracyM);
+        appendAccuracy(body, "VACC", in.verticalAccuracyM);
+        appendAccuracy(body, "SACC", in.speedAccuracyMps);
+        appendAccuracy(body, "BACC", in.bearingAccuracyDeg);
+        body.append(",AGE=").append(ageMillis);
+        body.append(",SRC=").append(in.source.wire());
         return frame("GPS", "SHARE", Collections.singletonList(body.toString()));
     }
 
     /** 无新解算时的保活帧：$GPSSHARE（带上一次解算的元数据）+ $GPZDA。 */
     public String keepaliveFrame(NmeaInput last, long ageMillis, long nowMillis) {
-        NmeaInput source = last == null ? new NmeaInput() : last;
+        if (last == null) {
+            // 从来没有过解算：只发一个纯保活帧。
+            // 不要造 $GPSSHARE 空壳 —— 接收端会把 AGE=0 读成「刚刚定位」，
+            // SEQ=0 还会把去重计数器倒回 0，等于凭空造出一份并不存在的解算。
+            return zda(nowMillis);
+        }
         StringBuilder sb = new StringBuilder();
-        sb.append(gpsShare(source, source.seq, ageMillis));
+        sb.append(gpsShare(last, ageMillis));
         sb.append(zda(nowMillis));
         return sb.toString();
     }
 
+    /**
+     * 追加一个精度键值对；值不可用时<b>整个键都不写</b>。
+     *
+     * <p>「未知」和「0」是两回事，而线上没有别的写法能表达「未知」—— 缺键才是。
+     * 两种情况必须挡住：
+     *
+     * <ul>
+     *   <li><b>非有限值。</b>{@code Float.isNaN(Infinity)} 为 false、{@code Infinity <= 0f}
+     *       也为 false，于是走到格式化那步印出字面量 {@code "Infinity"} —— 每个字符都是
+     *       ASCII，校验和照样成立，语句被当成格式良好的接收；接收端
+     *       {@code Double.parseDouble("Infinity")} 还会成功，拿到一个「极好的精度」。
+     *   <li><b>取整后归零的小正数。</b>{@code 0.04f} / {@code 0.049f} / {@code 0.01f} 都
+     *       能通过 {@code value > 0} 的守卫，但 {@code %.1f} 一律印成 {@code "0.0"} ——
+     *       接收端 {@code parseDouble("0.0")} 存成 0.0 而不是 NaN，等于谎报「完美精度」。
+     *       所以<b>先取整再判断</b>，而不是判断完再格式化。
+     * </ul>
+     */
     private static void appendAccuracy(StringBuilder body, String key, float value) {
-        if (Float.isNaN(value) || value <= 0f) {
+        if (!Float.isFinite(value) || value <= 0f) {
+            // 非有限值（NaN / ±Infinity）或非正数：无线上可表达的含义，整个键省略
+            return;
+        }
+        // 取整用 double 算，别用 float：float 的 value*10 会先溢出成 Infinity，
+        // Math.round 再把它饱和成 Integer.MAX_VALUE，除以 10 后印出「214748364.7」——
+        // 比真值小了四个数量级。double 下这条路不存在。
+        double rounded = Math.round((double) value * 10.0d) / 10.0d;
+        if (!(rounded > 0d) || Double.isInfinite(rounded)) {
+            // 太小，%.1f 会印成 0.0 —— 那等于谎报「完美精度」，宁可省略
             return;
         }
         body.append(',').append(key).append('=')
-                .append(String.format(Locale.US, "%.1f", value));
+                .append(String.format(Locale.US, "%.1f", rounded));
     }
 
     /** 按固定顺序拼装一帧（各语句均带 *CS 与 \r\n）。$GPSSHARE 恒在帧首。 */
     public String buildFrame(NmeaInput in, Set<NmeaSentenceType> enabled, long ageMillis) {
         StringBuilder sb = new StringBuilder();
-        sb.append(gpsShare(in, in.seq, ageMillis));
+        sb.append(gpsShare(in, ageMillis));
         if (enabled.contains(NmeaSentenceType.GGA)) {
             sb.append(gga(in));
         }

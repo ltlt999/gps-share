@@ -297,17 +297,23 @@ public class NmeaGeneratorTest {
         in.source = NmeaInput.Source.GPS;
         in.seq = 1234L;
 
-        String line = generator.gpsShare(in, 1234L, 842L);
+        String line = generator.gpsShare(in, 842L);
 
-        assertTrue(line.startsWith("$GPSSHARE,1,SEQ=1234"));
-        assertTrue(line.contains("ACC=12.5"));
-        assertTrue(line.contains("VACC=8.0"));
-        assertTrue(line.contains("SACC=0.8"));
-        assertTrue(line.contains("BACC=15.0"));
+        // golden：这条字符串就是两端应用之间的协议契约。
+        // 校验和 *78 是独立按 XOR 复算出来的，不是从实现里抄的 ——
+        // 字段顺序、增删、小数位数、拼写任何一处变化都必须在这里炸掉。
+        assertEquals("$GPSSHARE,1,SEQ=1234,ACC=12.5,VACC=8.0,SACC=0.8,BACC=15.0,"
+                + "AGE=842,SRC=GPS*78\r\n", line);
+
+        // 序号取自 in.seq（唯一真相源），调用方不再另传 seq
+        assertTrue(line.contains("SEQ=1234"));
+        // 带逗号前缀，避免 contains("ACC=") 顺带命中 VACC=
+        assertTrue(line.contains(",ACC="));
+        assertTrue(line.contains(",VACC="));
+        assertTrue(line.contains(",SACC="));
+        assertTrue(line.contains(",BACC="));
         assertTrue(line.contains("AGE=842"));
         assertTrue(line.contains("SRC=GPS"));
-        // 语句自带 *CS 与 \r\n，与其余生成方法一致
-        assertTrue(line.endsWith("\r\n"));
     }
 
     @Test
@@ -319,12 +325,12 @@ public class NmeaGeneratorTest {
         in.bearingAccuracyDeg = Float.NaN;
         in.source = NmeaInput.Source.NET;
 
-        String line = generator.gpsShare(in, 7L, 100L);
+        String line = generator.gpsShare(in, 100L);
 
-        assertFalse(line.contains("ACC="));
-        assertFalse(line.contains("VACC="));
-        assertFalse(line.contains("SACC="));
-        assertFalse(line.contains("BACC="));
+        assertFalse(line.contains(",ACC="));
+        assertFalse(line.contains(",VACC="));
+        assertFalse(line.contains(",SACC="));
+        assertFalse(line.contains(",BACC="));
         assertTrue(line.contains("SRC=NET"));
     }
 
@@ -337,20 +343,102 @@ public class NmeaGeneratorTest {
         in.bearingAccuracyDeg = Float.NaN;
         in.source = NmeaInput.Source.NONE;
 
-        String line = generator.gpsShare(in, 3L, 0L);
+        String line = generator.gpsShare(in, 0L);
 
         // 0 米精度与负精度同样没有意义，一律当「未知」处理，不发上线
-        assertFalse(line.contains("ACC="));
-        assertFalse(line.contains("VACC="));
-        assertFalse(line.contains("SACC="));
-        assertFalse(line.contains("BACC="));
+        assertFalse(line.contains(",ACC="));
+        assertFalse(line.contains(",VACC="));
+        assertFalse(line.contains(",SACC="));
+        assertFalse(line.contains(",BACC="));
         assertTrue(line.contains("SRC=NONE"));
+    }
+
+    @Test
+    public void gpsShareOmitsAccuracyThatRoundsToZero() {
+        NmeaInput in = sample();
+        in.accuracyM = 0.04f;
+        in.verticalAccuracyM = 0.049f;
+        in.speedAccuracyMps = 0.01f;
+        in.bearingAccuracyDeg = 0.0f;
+        in.source = NmeaInput.Source.GPS;
+        in.seq = 11L;
+
+        String line = generator.gpsShare(in, 250L);
+
+        // 这些都是正数，能通过 value > 0 的守卫；但 %.1f 会把它们印成 "0.0"，
+        // 接收端 parseDouble("0.0") 存成 0.0 而不是 NaN —— 等于谎报「完美精度」。
+        // 必须先取整再判断，取整后归零的一律省略。
+        assertFalse(line.contains(",ACC="));
+        assertFalse(line.contains(",VACC="));
+        assertFalse(line.contains(",SACC="));
+        assertFalse(line.contains(",BACC="));
+        // 其余字段照常上线
+        assertTrue(line.contains("SEQ=11"));
+        assertTrue(line.contains("AGE=250"));
+        assertTrue(line.contains("SRC=GPS"));
+    }
+
+    @Test
+    public void gpsShareOmitsInfiniteAccuracy() {
+        NmeaInput in = sample();
+        in.accuracyM = Float.POSITIVE_INFINITY;
+        in.verticalAccuracyM = Float.NEGATIVE_INFINITY;
+        in.speedAccuracyMps = Float.POSITIVE_INFINITY;
+        in.bearingAccuracyDeg = Float.NaN;
+        in.source = NmeaInput.Source.GPS;
+        in.seq = 4L;
+
+        String line = generator.gpsShare(in, 60L);
+
+        // Infinity 不是 NaN、也不小于 0，能一路走到 String.format("%.1f", …)，
+        // 印出字面量 "Infinity" —— 全是 ASCII，校验和照样成立，语句被当成格式良好的接收；
+        // 接收端 Double.parseDouble("Infinity") 还会成功，拿到 POSITIVE_INFINITY 而非 NaN。
+        assertFalse(line.contains(",ACC="));
+        assertFalse(line.contains(",VACC="));
+        assertFalse(line.contains(",SACC="));
+        assertFalse(line.contains(",BACC="));
+        assertFalse(line.contains("Infinity"));
+        assertTrue(line.contains("SRC=GPS"));
+    }
+
+    @Test
+    public void gpsShareDoesNotShrinkHugeAccuracy() {
+        NmeaInput in = sample();
+        in.accuracyM = Float.MAX_VALUE;
+        in.verticalAccuracyM = Float.NaN;
+        in.speedAccuracyMps = Float.NaN;
+        in.bearingAccuracyDeg = Float.NaN;
+        in.seq = 3L;
+
+        String line = generator.gpsShare(in, 45L);
+
+        // 取整必须在 double 上做。float 的 value*10 先溢出成 Infinity，
+        // Math.round 再饱和成 Integer.MAX_VALUE，除以 10 后印出「214748364.7」——
+        // 比真值小了四个数量级，线上就成了一个看起来很正常、其实完全失真的精度。
+        assertFalse(line.contains(",ACC=214748364.7"));
+        assertTrue(line.contains(",ACC=922337203685477600"));
+    }
+
+    @Test
+    public void gpsShareKeepsAccuracyThatSurvivesRounding() {
+        NmeaInput in = sample();
+        // 0.05 → 取整到 0.1，仍是正数，必须保留
+        in.accuracyM = 0.06f;
+        in.verticalAccuracyM = Float.NaN;
+        in.speedAccuracyMps = Float.NaN;
+        in.bearingAccuracyDeg = Float.NaN;
+        in.seq = 2L;
+
+        String line = generator.gpsShare(in, 30L);
+
+        assertTrue(line.contains(",ACC=0.1"));
+        assertFalse(line.contains(",VACC="));
     }
 
     @Test
     public void gpsShareHasValidChecksum() {
         NmeaInput in = sample();
-        String line = generator.gpsShare(in, 1L, 0L);
+        String line = generator.gpsShare(in, 0L);
         String body = line.substring(1, line.indexOf('*'));
         String given = line.substring(line.indexOf('*') + 1).trim();
         assertEquals(NmeaChecksum.toHex(NmeaChecksum.xor(body)), given);
@@ -363,8 +451,10 @@ public class NmeaGeneratorTest {
         in.seq = 5L;
         Set<NmeaSentenceType> all = EnumSet.allOf(NmeaSentenceType.class);
         String frame = generator.buildFrame(in, all, 300L);
-        assertTrue(frame.startsWith("$GPSSHARE,"));
-        assertTrue(frame.indexOf("$GPSSHARE") < frame.indexOf("$GPGGA"));
+        // 断言第一句就是它，而不是 indexOf 比较 —— $GPSSHARE 整个缺失时
+        // indexOf 返回 -1，而 -1 < indexOf("$GPGGA") 会静默成立
+        assertEquals("$GPSSHARE", frame.split("\r\n")[0].split(",")[0]);
+        assertTrue(frame.contains("SEQ=5"));
     }
 
     @Test
@@ -380,5 +470,19 @@ public class NmeaGeneratorTest {
         assertTrue(frame.contains("SEQ=9"));
         assertTrue(frame.contains("AGE=5000"));
         assertTrue(frame.contains("$GPZDA"));
+    }
+
+    @Test
+    public void keepaliveFrameWithoutFixSendsOnlyZda() {
+        String frame = generator.keepaliveFrame(null, 0L, 1_700_000_000_000L);
+
+        // 从来没有过解算时不能造 $GPSSHARE 空壳：
+        // AGE=0 在接收端正是「把时间戳重锚到本机此刻」的信号，
+        // 会把「从来没有过定位」表达成「一个 0 毫秒前刚解算出来的定位」；
+        // SEQ=0 还会把去重计数器倒回 0。
+        assertFalse(frame.contains("$GPSSHARE"));
+        assertTrue(frame.startsWith("$GPZDA,"));
+        assertEquals(1, frame.split("\r\n").length);
+        assertEquals("$GPZDA", frame.split("\r\n")[0].split(",")[0]);
     }
 }
