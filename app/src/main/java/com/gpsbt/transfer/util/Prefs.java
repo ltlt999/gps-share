@@ -59,6 +59,7 @@ public final class Prefs {
     private static final String KEY_LICENSE_CODE = "license_code";
     private static final String KEY_LICENSE_FIRST_RUN = "license_first_run";
     private static final String KEY_LICENSE_LAST_SEEN = "license_last_seen";
+    private static final String KEY_LICENSE_SINCE = "license_since";
 
     private static volatile Prefs instance;
     private final SharedPreferences prefs;
@@ -330,6 +331,16 @@ public final class Prefs {
 
     public void setLicenseLastSeen(long value) {
         prefs.edit().putLong(KEY_LICENSE_LAST_SEEN, value).apply();
+    }
+
+
+    /** 配置时刻（毫秒）；0 表示还没配置过。展示「N 年 N 月 N 日配置」用。 */
+    public long getLicenseSince() {
+        return prefs.getLong(KEY_LICENSE_SINCE, 0L);
+    }
+
+    public void setLicenseSince(long value) {
+        prefs.edit().putLong(KEY_LICENSE_SINCE, value).apply();
     }
 
     private static Set<String> defaultSentenceTokens() {

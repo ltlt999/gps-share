@@ -177,7 +177,8 @@
     <string name="settings_license_device">设备码</string>
     <string name="settings_license_state">状态</string>
     <string name="settings_license_trial">初始中（剩 %1$d 天）</string>
-    <string name="settings_license_active">已配置</string>
+    <string name="settings_license_active">✓ 已配置 · 感谢支持正版</string>
+    <string name="settings_license_active_since">%1$s 配置 · 永久有效 · 换设备请联系作者</string>
     <string name="settings_license_expired">初始已结束，请配置</string>
     <string name="settings_license_input">校验码</string>
     <string name="settings_license_apply">配置</string>

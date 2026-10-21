@@ -59,6 +59,8 @@ public class SettingsFragment extends Fragment {
     private Button requestPrecise;
     private TextView licenseDevice;
     private TextView licenseState;
+    private TextView licenseActiveSince;
+    private View licenseInputArea;
     private TextInputEditText inputLicense;
     private TextInputEditText inputWifiPort;
     private MaterialSwitch swDiscovery;
@@ -114,6 +116,8 @@ public class SettingsFragment extends Fragment {
         });
         licenseDevice = view.findViewById(R.id.license_device);
         licenseState = view.findViewById(R.id.license_state);
+        licenseActiveSince = view.findViewById(R.id.license_active_since);
+        licenseInputArea = view.findViewById(R.id.license_input_area);
         inputLicense = view.findViewById(R.id.input_license);
 
         about.setText(getString(R.string.settings_about_body, versionName()));
@@ -370,9 +374,16 @@ public class SettingsFragment extends Fragment {
         }
     }
 
-    /** 刷新授权状态那一行。 */
+    /**
+     * 授权卡片的显隐。
+     *
+     * 已配置：状态行 + 配置日期，**输入区整个隐藏**——留着空输入框和按钮
+     * 会诱导人乱填一气，也没有任何再配置的场景（配置是永久的）。
+     * 未配置（初始/过期）：显示输入区，隐藏日期行。
+     */
     private void renderLicenseState() {
         Context context = requireContext();
+        boolean active = 本地配置.isActivated(context);
         switch (本地配置.state(context)) {
             case ACTIVE:
                 licenseState.setText(R.string.settings_license_active);
@@ -389,6 +400,19 @@ public class SettingsFragment extends Fragment {
                 licenseState.setText(R.string.settings_license_expired);
                 licenseState.setTextColor(getResources().getColor(R.color.color_error, null));
                 break;
+        }
+        if (active) {
+            long since = prefs.getLicenseSince();
+            String date = since > 0
+                    ? android.text.format.DateFormat.getDateFormat(context)
+                            .format(new java.util.Date(since))
+                    : "";
+            licenseActiveSince.setText(getString(R.string.settings_license_active_since, date));
+            licenseActiveSince.setVisibility(View.VISIBLE);
+            licenseInputArea.setVisibility(View.GONE);
+        } else {
+            licenseActiveSince.setVisibility(View.GONE);
+            licenseInputArea.setVisibility(View.VISIBLE);
         }
     }
 
@@ -410,6 +434,7 @@ public class SettingsFragment extends Fragment {
         if (本地配置.activate(requireContext(), code)) {
             inputLicense.setText("");
             renderLicenseState();
+            // renderLicenseState 会把输入区藏起来，配置成功后界面自然收尾
             Toast.makeText(requireContext(), R.string.settings_license_ok,
                     Toast.LENGTH_LONG).show();
         } else {
