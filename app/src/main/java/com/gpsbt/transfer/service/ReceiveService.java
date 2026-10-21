@@ -443,6 +443,11 @@ public class ReceiveService extends Service {
         public void onProgress(long bytes, long sentences) {
             stats.bytes = bytes;
             stats.sentences = sentences;
+            // 速率窗口也要在这里推进：接收速率量的是「定位/秒」，
+            // 发送端没有定位时（只发保活帧）不会有位置快照，
+            // 只在 onLocation 里结算的话，这个数会永远停在最后一个值上 ——
+            // 明明一个定位都没收到，却显示着 1.0 定位/秒。
+            updateReceiveRate(System.currentTimeMillis());
             // 通知里的「已接收 N 句」也要跟着走：发送端没有新定位时只有保活帧，
             // 那时不会有位置快照，通知不刷新的话这个数会一直停在原地。
             // 每秒最多刷一次，别把通知刷成噪音。
