@@ -12,6 +12,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "GpsShare"
+rootProject.name = "GpsShare2"
 include ':app'
 include ':internal-tools'
