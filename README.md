@@ -178,7 +178,7 @@ adb install -r 构建目录/app/outputs/apk/debug/app-debug.apk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest
 ```
 
-覆盖范围（189 个用例）：
+覆盖范围（191 个用例）：
 
 - `NmeaChecksumTest`：XOR 校验和算法（含两个标准样例 `*47` / `*6A`）、两位十六进制补零、`\r\n` 结尾
 - `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关、`$GPSSHARE` 的 golden 字符串与精度取值规则（非有限值与取整归零一律省略整个键）
