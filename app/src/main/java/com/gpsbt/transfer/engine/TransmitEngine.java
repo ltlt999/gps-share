@@ -56,7 +56,12 @@ public final class TransmitEngine {
         this.staleMillis = staleMillis;
     }
 
-    /** 后台线程调用：把解算放进队列，不写流。 */
+    /**
+     * 主线程调用（定位回调里）：把解算放进队列，不写流。
+     *
+     * 真正的写链路在调用方的后台执行器里（{@link #tick}）。这里只入队，
+     * 是为了不给主线程引入任何 IO 阻塞。
+     */
     public void publish(NmeaInput input) {
         if (input == null) {
             return;

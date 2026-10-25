@@ -78,9 +78,18 @@ public class ReceiveService extends Service {
                 public void onInjectionFailed(String message) {
                     LogBus.get().log(LogBus.Level.ERROR, "定位注入连续失败：" + message);
                     state.setStatusText(getString(R.string.receive_inject_failed));
+                    injectionFailed = true;
                     refreshNotification();
                 }
             };
+    /**
+     * 注入是否处于失败状态。
+     *
+     * <p>必须单独记一位并写进常驻通知：用户多半不打开 App，
+     * 只在通知栏看状态。只更新 statusText 的话，这条最关键的告警
+     * 永远送不到用户眼前。
+     */
+    private volatile boolean injectionFailed;
     private String host;
     private int port;
     /** 停止幂等守卫：stopSelfSafely 被多次调用时只真正执行一次。 */
@@ -476,6 +485,10 @@ public class ReceiveService extends Service {
             updateReceiveRate(System.currentTimeMillis());
             if (injector != null) {
                 injector.inject(location);
+                // 写入恢复正常就把告警撤掉，别让用户一直看到已经消失的问题
+                if (injectionFailed && injector.lastWriteSucceeded()) {
+                    injectionFailed = false;
+                }
             }
             // 定位状态：每个解算更新一次
             TransmitterState.Fix fix = new TransmitterState.Fix();
@@ -545,14 +558,28 @@ public class ReceiveService extends Service {
 
     private Notification buildNotification() {
         TransmitterState.Fix fix = state.fix();
-        String title = state.bt() == TransmitterState.Bt.CONNECTED
-                ? getString(R.string.receive_notif_receiving)
-                : getString(R.string.receive_notif_waiting);
+        // 注入失败是最要紧的状态：它意味着导航 App 根本收不到位置。
+        // 必须占领标题 —— 用户多半不看 App，只在通知栏扫一眼。
+        String title;
+        if (injectionFailed) {
+            title = getString(R.string.receive_inject_failed);
+        } else {
+            title = state.bt() == TransmitterState.Bt.CONNECTED
+                    ? getString(R.string.receive_notif_receiving)
+                    : getString(R.string.receive_notif_waiting);
+        }
         StringBuilder text = new StringBuilder();
         text.append(client == null ? "" : client.currentTarget());
         if (fix != null && fix.valid) {
             text.append("　").append(Formatters.latitude(fix.latitude))
                     .append("　").append(Formatters.longitude(fix.longitude));
+            // 位置在变旧也要说：断链或发送端无解算时，坐标会一直停在原地，
+            // 通知里不标出来，用户会以为还在正常导航
+            long age = System.currentTimeMillis() - fix.fixAt;
+            if (fix.fixAt > 0L && age > 5000L) {
+                text.append("　").append(getString(R.string.stat_latency_stale,
+                        String.format(java.util.Locale.US, "%.0f", age / 1000.0d)));
+            }
         }
         text.append("　").append(getString(R.string.receive_notif_stats,
                 stats.sentences,

@@ -34,6 +34,8 @@ public final class MockLocationInjector {
     private final InjectionPolicy policy = new InjectionPolicy();
     /** 连续注入失败次数：到 3 次就明确报错给用户看。 */
     private int consecutiveFailures;
+    /** 最近一次注入是否真的写进系统（false = 被系统拒绝或抛异常）。 */
+    private volatile boolean lastWriteSucceeded = true;
 
     /** 失败回调：连续失败达到阈值时通知外部（界面 / 通知）。 */
     public interface FailureListener {
@@ -137,6 +139,11 @@ public final class MockLocationInjector {
         policy.reset();
     }
 
+    /** 最近一次注入是否成功写入系统；界面据此决定要不要亮告警。 */
+    public boolean lastWriteSucceeded() {
+        return lastWriteSucceeded;
+    }
+
     /**
      * 注入一次定位。
      *
@@ -194,8 +201,10 @@ public final class MockLocationInjector {
         try {
             manager.setTestProviderLocation(LocationManager.GPS_PROVIDER, location);
             consecutiveFailures = 0;
+            lastWriteSucceeded = true;
         } catch (SecurityException | IllegalArgumentException e) {
             consecutiveFailures++;
+            lastWriteSucceeded = false;
             LogBus.get().log(LogBus.Level.WARN, "注入定位失败：" + e.getMessage());
             if (consecutiveFailures >= 3 && failureListener != null) {
                 failureListener.onInjectionFailed(String.valueOf(e.getMessage()));

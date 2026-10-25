@@ -336,7 +336,7 @@ rx/MockLocationInjector.java ← Android 胶水：构造 Location、setTestProvi
 |---|---|
 | `nmea/NmeaInput.java` | 新增 `fixTimeMillis` / `fixElapsedRealtimeNanos` / `verticalAccuracyM` / `speedAccuracyMps` / `bearingAccuracyDeg` / `source` / `seq`，新增 `ageMillis(nowElapsedNanos)` |
 | `nmea/NmeaGenerator.java` | 新增 `gpsShare()`；`gga`/`rmc` 用真实解算时刻 |
-| `nmea/NmeaSentenceType.java` | 新增 `GPSSHARE`（**不可关闭**，始终发送） |
+| `nmea/NmeaSentenceType.java` | **（实施后修正）不改**：`$GPSSHARE` 不进「用户可开关的语句」枚举，而是在 `NmeaGenerator.buildFrame()` 里无条件拼到帧首。它在语义上是元数据而不是可选语句，进枚举反而会多出一个不该存在的开关 |
 | `engine/LocationProvider.java` | `toInput` 采集真实精度/来源/解算时刻/elapsedRealtime |
 | `engine/TransmitEngine.java` | `publish` 改为请求发送；帧首拼 `$GPSSHARE` |
 | `service/GpsOutputService.java` | 事件驱动发送执行器；保活定时器；`SEQ` 自增；同一解算去重 |
