@@ -68,7 +68,11 @@ android {
     }
 
     packagingOptions {
-        resources.excludes += ['META-INF/*.version']
+        resources.excludes += [
+                'META-INF/*.version',
+                'META-INF/version-control-info.textproto',
+                'META-INF/com/android/build/gradle/app-metadata.properties'
+        ]
     }
 }
 
