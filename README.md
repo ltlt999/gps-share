@@ -278,3 +278,20 @@ app/src/main/java/com/gpsbt/transfer/
 - P2（WiFi 发送端）：[docs/superpowers/plans/2026-10-13-gps-share-p2-wifi-sender.md](docs/superpowers/plans/2026-10-13-gps-share-p2-wifi-sender.md)
 - P3（接收端）：[docs/superpowers/plans/2026-10-13-gps-share-p3-receiver.md](docs/superpowers/plans/2026-10-13-gps-share-p3-receiver.md)
 - v2.0.0 定位保真改造：设计 [spec](docs/superpowers/specs/2026-10-22-gps-share-v2-fidelity-design.md) · 计划 [plan](docs/superpowers/plans/2026-10-22-gps-share-v2-fidelity.md)
+
+---
+
+## 支持这个项目
+
+这个项目是我利用业余时间独立开发和维护的：从 NMEA 解析、蓝牙 / WiFi 双链路，到接收端定位注入和 185 个单元测试，都是一点点磨出来的。项目没有广告、没有付费墙、没有功能限制，后续也会继续以 MIT 协议免费开源。
+
+如果它帮你省下了时间，或者让闲置的车机、平板重新用上了 GPS，欢迎扫码请我喝杯咖啡。金额随意，心意就好；不捐赠也完全不影响使用。
+
+<p align="center">
+  <img src="docs/donate/alipay.jpg" alt="支付宝赞赏码" width="300">
+</p>
+
+<p align="center"><sub>支付宝扫码 · 旭心涛网络工作室</sub></p>
+
+> 也欢迎点一个 Star、提一个 Issue，或者把项目分享给需要的人——这些同样是很实在的支持。
+
