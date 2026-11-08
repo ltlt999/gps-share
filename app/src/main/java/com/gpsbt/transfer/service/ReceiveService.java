@@ -32,7 +32,6 @@ import com.gpsbt.transfer.rx.BluetoothNmeaClient;
 import com.gpsbt.transfer.rx.MockLocationInjector;
 import com.gpsbt.transfer.rx.NmeaClient;
 import com.gpsbt.transfer.rx.ReceiveLink;
-import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.state.TransmitStats;
 import com.gpsbt.transfer.state.TransmitterState;
@@ -144,10 +143,6 @@ public class ReceiveService extends Service {
     public static String prerequisiteFailure(Context context) {
         if (!LocationProvider.hasPermission(context)) {
             return context.getString(R.string.boot_reason_location);
-        }
-        // 授权把关放在服务层，界面、开机广播、看门狗都绕不过去
-        if (!本地配置.isUsable(context)) {
-            return context.getString(R.string.license_expired_title);
         }
         Prefs prefs = Prefs.get(context);
         if (prefs.getTransport() == Transport.BLUETOOTH) {
@@ -469,13 +464,6 @@ public class ReceiveService extends Service {
 
         @Override
         public void onLocation(NmeaInput location) {
-            // 前置条件在运行期间也可能变化——只在启动时查一次的话，
-            // 跨过到期点的会话会一直跑下去
-            if (!prerequisiteSatisfied(ReceiveService.this)) {
-                LogBus.get().log(LogBus.Level.WARN, "前置条件不满足，停止接收");
-                stopSelfSafely(false);
-                return;
-            }
             // 位置速率：只数位置快照。卫星快照与位置快照是同一个解算，
             // 两边都数的话接收速率会翻倍（1 Hz 的 GPS 会显示成 2.0 定位/秒），
             // 与发送端的「发送速率」也对不上。

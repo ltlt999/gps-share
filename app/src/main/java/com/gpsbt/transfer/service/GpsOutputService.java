@@ -37,7 +37,6 @@ import com.gpsbt.transfer.net.NetLinkManager;
 import com.gpsbt.transfer.nmea.NmeaGenerator;
 import com.gpsbt.transfer.nmea.NmeaInput;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
-import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.state.NmeaLog;
 import com.gpsbt.transfer.state.TransmitterState;
@@ -161,10 +160,6 @@ public class GpsOutputService extends Service {
     public static String prerequisiteFailure(Context context) {
         if (!LocationProvider.hasPermission(context)) {
             return context.getString(R.string.boot_reason_location);
-        }
-        // 授权把关放在服务层，界面、开机广播、看门狗都绕不过去
-        if (!本地配置.isUsable(context)) {
-            return context.getString(R.string.license_expired_title);
         }
         Prefs prefs = Prefs.get(context);
         // WiFi 通道不依赖蓝牙硬件与配对，跳过蓝牙相关的前置检查
@@ -694,14 +689,6 @@ public class GpsOutputService extends Service {
     private void tickKeepalive() {
         long nowMillis = System.currentTimeMillis();
         long nowElapsed = SystemClock.elapsedRealtimeNanos();
-        // 授权在**运行期间**也可能到期（初始配置期正好在今天结束）。只在启动时查
-        // 一次的话，一个跨过到期点的会话会一直跑下去，等于白送。
-        if (!prerequisiteSatisfied(this)) {
-            LogBus.get().log(LogBus.Level.WARN, "前置条件不满足，停止传输");
-            state.setStatusText(getString(R.string.license_expired_title));
-            stopSelfSafely(false);
-            return;
-        }
         // 只有"开机广播在后台启动 + Android 12+"才会拿不到定位（系统禁止后台启动的
         // 前台服务读定位）。界面启动属前台操作，不受此限制，因此不能超时停掉——
         // GPS 冷启动可能要几十秒到几分钟，等不到定位就停会误伤正常使用

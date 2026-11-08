@@ -26,7 +26,6 @@ import com.gpsbt.transfer.R;
 import com.gpsbt.transfer.bt.BluetoothLinkManager;
 import com.gpsbt.transfer.bt.ConnectionMode;
 import com.gpsbt.transfer.link.Peer;
-import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.link.Role;
 import com.gpsbt.transfer.link.Transport;
 import com.gpsbt.transfer.net.DiscoveryListener;
@@ -119,8 +118,6 @@ public class HomeFragment extends Fragment
     private String selectedMac;
     /** 当前数据卡片是按哪个角色建的；null 表示还没建（视图刚创建）。 */
     private Boolean builtRole;
-    /** 初始到期的整页遮罩。 */
-    private View licenseOverlay;
 
     @Nullable
     @Override
@@ -172,21 +169,6 @@ public class HomeFragment extends Fragment
         inputHost = view.findViewById(R.id.input_host);
         inputPort = view.findViewById(R.id.input_port);
         statsGrid = view.findViewById(R.id.stats_grid);
-        licenseOverlay = view.findViewById(R.id.license_overlay);
-        // 整块遮罩和里面的按钮都跳到设置页——授权卡片在那里
-        licenseOverlay.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                openLicenseSettings();
-            }
-        });
-        view.findViewById(R.id.btn_overlay_activate).setOnClickListener(
-                new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        openLicenseSettings();
-                    }
-                });
 
         // 数据卡片交给 renderPanels() → ensureGridForRole() 按当前角色建，
         // 这里不建，避免建两次
@@ -369,11 +351,6 @@ public class HomeFragment extends Fragment
             stopAllServices();
             return;
         }
-        // 初始结束且未配置时拒绝启动，并告诉用户去哪儿配置
-        if (!本地配置.isUsable(requireContext())) {
-            showLicenseExpiredDialog();
-            return;
-        }
         if (prefs.getRole() == Role.RECEIVE) {
             onReceiveStart();
             return;
@@ -395,15 +372,6 @@ public class HomeFragment extends Fragment
                 ? R.id.transport_wifi : R.id.transport_bluetooth);
         modeGroup.check(prefs.getMode() == ConnectionMode.CLIENT
                 ? R.id.mode_client : R.id.mode_server);
-    }
-
-    /** 初始结束且未配置：说明去哪儿配置，而不是静默什么都不做。 */
-    private void showLicenseExpiredDialog() {
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.license_expired_title)
-                .setMessage(R.string.license_expired_body)
-                .setPositiveButton(R.string.license_expired_ok, null)
-                .show();
     }
 
     /** 两个服务任一在跑就算「在传输」。 */
@@ -537,13 +505,6 @@ public class HomeFragment extends Fragment
         }
     }
 
-    /** 跳到设置页——初始到期的遮罩点一下就到这里。 */
-    private void openLicenseSettings() {
-        if (getActivity() instanceof HomeCallbacks) {
-            ((HomeCallbacks) getActivity()).openSettings();
-        }
-    }
-
     /** Activity 需实现的入口。 */
     public interface HomeCallbacks {
         void requestStartPermissions(Runnable onGranted);
@@ -556,9 +517,6 @@ public class HomeFragment extends Fragment
          *                      直接弹「无蓝牙硬件」并把启动吞掉
          */
         void requestStartPermissions(Runnable onGranted, boolean needBluetooth);
-
-        /** 切到底部导航的「设置」页。 */
-        void openSettings();
     }
 
     private void loadDevices() {
@@ -805,11 +763,6 @@ public class HomeFragment extends Fragment
     }
 
     private void renderPanels() {
-        // 初始到期的遮罩盖住整页：核心功能已经不可用，留个入口让用户去配置，
-        // 而不是让他对着一个按了没反应的按钮猜
-        licenseOverlay.setVisibility(
-                本地配置.isUsable(requireContext()) ? View.GONE : View.VISIBLE);
-
         boolean receive = prefs.getRole() == Role.RECEIVE;
         boolean wifi = prefs.getTransport() == Transport.WIFI;
         boolean client = prefs.getMode() == ConnectionMode.CLIENT;

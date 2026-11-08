@@ -3,6 +3,7 @@
 中文必须显式设置 w:eastAsia 字体，否则 Word 会用 fallback 字体渲染，
 中文看起来会「不对劲」。所有 run 都过 set_font() 就是为了这个。
 """
+import os
 import docx
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -149,7 +150,7 @@ set_font(title.add_run("GPS共享 · 使用教程"), size=22, bold=True)
 sub = doc.add_paragraph()
 sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
 sub.paragraph_format.space_after = Pt(20)
-set_font(sub.add_run("万物皆可买　作者邮箱：ltlt999@users.noreply.github.com"), size=10, color=DIM)
+set_font(sub.add_run("万物皆可买　项目主页：https://github.com/ltlt999/gps-share"), size=10, color=DIM)
 
 # ---- 一 ----
 h1("一、这个软件能干什么？")
@@ -240,26 +241,7 @@ warn("**导航里卫星数显示 0？这是正常的。** 安卓系统的限制�
      "传不了卫星图。**不影响导航使用**。想看卫星，在本软件的「卫星」页看，那里是正常的。")
 
 # ---- 六 ----
-h1("六、配置")
-p("软件有 **1 天免费初始**，初始配置期内功能完整。初始结束后会提示配置。")
-
-h2("怎么配置")
-numbered("打开「GPS共享」→「**设置**」→ 找到「**授权**」卡片")
-numbered("点「**复制设备码**」（形如 A7F3-2K9D-8XQ1）")
-numbered("把设备码发到 **ltlt999@users.noreply.github.com**")
-numbered("你会收到一串**校验码**")
-numbered("把它填进「授权」里的输入框，点「**配置**」")
-p("配置后**永久有效**。状态会显示「已配置」。")
-quote("**校验码和这台设备绑定**，换设备要重新获取。")
-quote("输错了也没关系——字母 O 和数字 0、字母 I/L 和数字 1 弄混了也能识别，"
-      "横线、空格、大小写都不影响。")
-
-h2("初始到期会怎样")
-p("主页会被一层遮罩盖住，写着「初始已结束」。**点一下遮罩**"
-  "（或点里面的「去配置」按钮）会直接跳到「授权」页面，不用自己找。")
-
-# ---- 七 ----
-h1("七、常见问题")
+h1("六、常见问题")
 qa = [
     ("导航软件里位置不动 / 一直没反应？",
      "检查第五节的「模拟位置」有没有设置好——**这是最常见的原因**。"
@@ -272,7 +254,7 @@ qa = [
     ("导航里卫星数是 0，是不是坏了？",
      "不是。安卓系统的限制，只影响「显示卫星数」，**不影响导航**（见 5.4 的说明）。"),
     ("换手机 / 换车机了怎么办？",
-     "新设备要重新获取校验码，把新设备码发到上面那个邮箱就行。"),
+     "直接装上就能用，软件免费开源，不需要配置。"),
     ("想改发送频率、关掉某些数据？",
      "「设置」页里有：频率滑块（1–10 次/秒），以及五类数据的开关。"
      "**不懂就别动**，默认值就是最通用的。"),
@@ -281,14 +263,15 @@ for question, answer in qa:
     p("**Q：" + question + "**")
     p("A：" + answer, indent=0.6)
 
-# ---- 八 ----
-h1("八、联系作者")
-bullet("品牌：**万物皆可买**")
-bullet("邮箱：**ltlt999@users.noreply.github.com**")
-p("遇到问题请把这两样一起发过来，能快很多：")
+# ---- 七 ----
+h1("七、反馈问题")
+bullet("项目主页：**https://github.com/ltlt999/gps-share**")
+bullet("问题反馈：**https://github.com/ltlt999/gps-share/issues**")
+p("遇到问题请在 issue 里附上这两样，能快很多：")
 numbered("你在做什么操作")
 numbered("「GPS共享」→「日志」页的截图（或点「导出」把日志文件发过来）")
 
-out = r"工作区根目录\GPS共享\docs\GPS共享-使用教程.docx"
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs",
+                   "GPS共享-使用教程.docx")
 doc.save(out)
 print("已生成:", out)

@@ -1,6 +1,6 @@
 # GPS共享
 
-> **万物皆可买** · 作者邮箱：ltlt999@users.noreply.github.com
+> **万物皆可买** · 项目主页：https://github.com/ltlt999/gps-share
 
 把 Android 手机的 GPS 定位共享给**没有 GPS 的设备**（平板、车机、工控机、笔记本）。
 
@@ -178,7 +178,7 @@ adb install -r 构建目录/app/outputs/apk/debug/app-debug.apk
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest
 ```
 
-覆盖范围（201 个用例）：
+覆盖范围（185 个用例）：
 
 - `NmeaChecksumTest`：XOR 校验和算法（含两个标准样例 `*47` / `*6A`）、两位十六进制补零、`\r\n` 结尾
 - `NmeaGeneratorTest`：五类语句字段拼装、南纬/西经半球、度分转换边界、HDOP 估算、GSV 分页、语句开关、`$GPSSHARE` 的 golden 字符串与精度取值规则（非有限值与取整归零一律省略整个键）
@@ -200,7 +200,6 @@ JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitT
 - `ConstellationsTest`：星座 talker → 国旗映射、六个星座旗标互不相同、未知 talker 回落到中性旗
 - `NmeaLogTest`：NMEA 语句分类（GSV/GSA 归「卫星」、其余归「数据」）、去空白、空行忽略、保持到达顺序
 - `SatelliteOrderTest`：卫星明细排序（在用优先、同组按信噪比降序、相同则保持原序、无信号沉底、空表安全）
-- `LicenseCodeTest`：设备码稳定性与格式、易混字符纠正、校验码绑定设备、签名种子联动、空/乱码不放行
 
 测试报告：`构建目录\app\reports\tests\testDebugUnitTest\index.html`
 
@@ -271,18 +270,6 @@ app/src/main/java/com/gpsbt/transfer/
 ## 真机调试
 
 详见 [docs/USAGE.md](docs/USAGE.md)：安装、各角色与传输方式的操作步骤、Windows 接收端如何开串口看数据、接收端如何接管系统定位、常见问题排查。
-
-## 授权与完整性
-
-发布版包含三层保护（详见 [docs/发布与生成指南.md](docs/发布与生成指南.md)）：
-
-1. **R8 混淆 + 资源压缩**——反编译出来只有 `a.b.c()`，改一个判断绕过校验不再是一眼的事
-2. **签名校验**——「改包名 → 重新签名 → 发出去」这种最常见的倒卖手法会被直接拒绝运行
-3. **校验码绑定设备**——设置页显示本机设备码，用户发给作者换取专属校验码，一份码只能一台机器用
-
-签名指纹被混进校验码的密钥，两处校验互相绑定：想绕过配置必须**同时**破掉签名校验。
-
-未配置有 30 天初始配置期（`本地配置.TRIAL_DAYS`，设 0 则不限制）。
 
 ## 设计文档与实现计划
 

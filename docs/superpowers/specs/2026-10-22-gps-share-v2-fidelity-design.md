@@ -289,6 +289,8 @@ rx/MockLocationInjector.java ← Android 胶水：构造 Location、setTestProvi
 - 不做多源融合：接收端自己的 GPS 被测试提供者覆盖，无从融合
 - 不做卫星星图注入：Android 平台限制（测试提供者不支持 `GnssStatus`，导航 App 里卫星数显示 0）
 - `applicationId` 保持 `com.gpsshare`，可原地升级。
+
+  本版本已开源，`applicationId` 仍保持 `com.gpsshare`，可原地升级。
 - 不产出配套 PC 端工具
 
 ---

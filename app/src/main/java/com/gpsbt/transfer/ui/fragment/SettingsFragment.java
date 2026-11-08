@@ -1,8 +1,5 @@
 package com.gpsbt.transfer.ui.fragment;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.os.Bundle;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -12,7 +9,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -22,7 +18,6 @@ import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.slider.Slider;
 import com.google.android.material.textfield.TextInputEditText;
 import com.gpsbt.transfer.R;
-import com.gpsbt.transfer.license.本地配置;
 import com.gpsbt.transfer.nmea.NmeaSentenceType;
 import com.gpsbt.transfer.state.LogBus;
 import com.gpsbt.transfer.state.TransmitterState;
@@ -58,11 +53,6 @@ public class SettingsFragment extends Fragment {
     private TextView locationPermLive;
     private ActivityResultLauncher<String[]> preciseLocationLauncher;
     private Button requestPrecise;
-    private TextView licenseDevice;
-    private TextView licenseState;
-    private TextView licenseActiveSince;
-    private View licenseInputArea;
-    private TextInputEditText inputLicense;
     private TextInputEditText inputWifiPort;
     private MaterialSwitch swDiscovery;
     private TextInputEditText inputDiscoveryPort;
@@ -116,29 +106,7 @@ public class SettingsFragment extends Fragment {
                 preciseLocationLauncher.launch(LocationPermission.preciseRequest());
             }
         });
-        licenseDevice = view.findViewById(R.id.license_device);
-        licenseState = view.findViewById(R.id.license_state);
-        licenseActiveSince = view.findViewById(R.id.license_active_since);
-        licenseInputArea = view.findViewById(R.id.license_input_area);
-        inputLicense = view.findViewById(R.id.input_license);
-
         about.setText(getString(R.string.settings_about_body, versionName()));
-
-        licenseDevice.setText(本地配置.deviceCode(requireContext()));
-        renderLicenseState();
-
-        view.findViewById(R.id.btn_copy_device).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                copyDeviceCode();
-            }
-        });
-        view.findViewById(R.id.btn_apply_license).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                applyLicense();
-            }
-        });
 
         swAutostart = view.findViewById(R.id.sw_autostart);
         swAutostart.setChecked(prefs.isAutoStartOnBoot());
@@ -393,75 +361,6 @@ public class SettingsFragment extends Fragment {
                             : "--"));
         } else {
             locationPermLive.setText(R.string.settings_location_live_stale);
-        }
-    }
-
-    /**
-     * 授权卡片的显隐。
-     *
-     * 已配置：状态行 + 配置日期，**输入区整个隐藏**——留着空输入框和按钮
-     * 会诱导人乱填一气，也没有任何再配置的场景（配置是永久的）。
-     * 未配置（初始/过期）：显示输入区，隐藏日期行。
-     */
-    private void renderLicenseState() {
-        Context context = requireContext();
-        boolean active = 本地配置.isActivated(context);
-        switch (本地配置.state(context)) {
-            case ACTIVE:
-                licenseState.setText(R.string.settings_license_active);
-                licenseState.setTextColor(
-                        getResources().getColor(R.color.color_primary, null));
-                break;
-            case TRIAL:
-                licenseState.setText(getString(R.string.settings_license_trial,
-                        本地配置.trialDaysLeft(context)));
-                licenseState.setTextColor(
-                        getResources().getColor(R.color.color_accent_blue, null));
-                break;
-            default:
-                licenseState.setText(R.string.settings_license_expired);
-                licenseState.setTextColor(getResources().getColor(R.color.color_error, null));
-                break;
-        }
-        if (active) {
-            long since = prefs.getLicenseSince();
-            String date = since > 0
-                    ? android.text.format.DateFormat.getDateFormat(context)
-                            .format(new java.util.Date(since))
-                    : "";
-            licenseActiveSince.setText(getString(R.string.settings_license_active_since, date));
-            licenseActiveSince.setVisibility(View.VISIBLE);
-            licenseInputArea.setVisibility(View.GONE);
-        } else {
-            licenseActiveSince.setVisibility(View.GONE);
-            licenseInputArea.setVisibility(View.VISIBLE);
-        }
-    }
-
-    /** 复制设备码：用户要把它发到作者邮箱换取校验码。 */
-    private void copyDeviceCode() {
-        ClipboardManager clipboard = (ClipboardManager)
-                requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboard != null) {
-            clipboard.setPrimaryClip(ClipData.newPlainText("device-code",
-                    licenseDevice.getText()));
-        }
-        Toast.makeText(requireContext(), R.string.settings_license_copied,
-                Toast.LENGTH_LONG).show();
-    }
-
-    private void applyLicense() {
-        String code = inputLicense.getText() == null
-                ? "" : inputLicense.getText().toString();
-        if (本地配置.activate(requireContext(), code)) {
-            inputLicense.setText("");
-            renderLicenseState();
-            // renderLicenseState 会把输入区藏起来，配置成功后界面自然收尾
-            Toast.makeText(requireContext(), R.string.settings_license_ok,
-                    Toast.LENGTH_LONG).show();
-        } else {
-            Toast.makeText(requireContext(), R.string.settings_license_bad,
-                    Toast.LENGTH_LONG).show();
         }
     }
 
